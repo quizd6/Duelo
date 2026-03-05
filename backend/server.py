@@ -1,4 +1,5 @@
 from fastapi import FastAPI, APIRouter, Depends, HTTPException
+from fastapi.responses import HTMLResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 import os
@@ -565,6 +566,14 @@ async def health(db: AsyncSession = Depends(get_db)):
         return {"status": "healthy", "database": "connected"}
     except Exception as e:
         return {"status": "unhealthy", "database": str(e)}
+
+
+# ── Admin Dashboard (Desktop Web) ──
+
+@api_router.get("/admin/dashboard", response_class=HTMLResponse)
+async def admin_dashboard():
+    html_path = ROOT_DIR / "admin_dashboard.html"
+    return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
 
 
 # ── App Setup ──

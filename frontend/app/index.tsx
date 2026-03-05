@@ -190,20 +190,7 @@ export default function WelcomeScreen() {
                 )}
               </TouchableOpacity>
 
-              <View style={styles.divider}>
-                <View style={styles.dividerLine} />
-                <Text style={styles.dividerText}>ou</Text>
-                <View style={styles.dividerLine} />
-              </View>
-
-              <TouchableOpacity
-                testID="admin-btn"
-                style={styles.adminButton}
-                onPress={() => router.push('/admin-dashboard')}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.adminButtonText}>Admin Dashboard</Text>
-              </TouchableOpacity>
+              
             </View>
           </Animated.View>
 
