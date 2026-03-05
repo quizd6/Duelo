@@ -310,13 +310,6 @@ export default function GameScreen() {
 
                 return (
                   <View key={index} style={styles.optionRow}>
-                    {/* Left triangle (player pick) */}
-                    <View style={styles.triangleSpace}>
-                      {showResult && isPlayerPick && (
-                        <View style={styles.triangleLeft} />
-                      )}
-                    </View>
-
                     {/* Answer Card */}
                     <TouchableOpacity
                       testID={`option-${index}`}
@@ -328,14 +321,21 @@ export default function GameScreen() {
                       <Text style={[styles.optionText, { color: getOptionTextColor(index) }]} numberOfLines={2}>
                         {option}
                       </Text>
-                    </TouchableOpacity>
 
-                    {/* Right triangle (bot pick) */}
-                    <View style={styles.triangleSpace}>
-                      {showResult && isBotPick && (
-                        <View style={styles.triangleRight} />
+                      {/* Left triangle (player pick) - bites into left edge, points right */}
+                      {showResult && isPlayerPick && (
+                        <View style={styles.triangleLeftWrap}>
+                          <View style={styles.triangleLeft} />
+                        </View>
                       )}
-                    </View>
+
+                      {/* Right triangle (bot pick) - bites into right edge, points left */}
+                      {showResult && isBotPick && (
+                        <View style={styles.triangleRightWrap}>
+                          <View style={styles.triangleRight} />
+                        </View>
+                      )}
+                    </TouchableOpacity>
                   </View>
                 );
               })}
@@ -455,26 +455,14 @@ const styles = StyleSheet.create({
   // ── Options ──
   optionsBox: { flex: 1, justifyContent: 'center', gap: 10, paddingBottom: 16 },
   optionRow: {
-    flexDirection: 'row', alignItems: 'center',
-  },
-  triangleSpace: { width: 20, alignItems: 'center', justifyContent: 'center' },
-  triangleLeft: {
-    width: 0, height: 0,
-    borderTopWidth: 12, borderTopColor: 'transparent',
-    borderBottomWidth: 12, borderBottomColor: 'transparent',
-    borderRightWidth: 14, borderRightColor: '#000000',
-  },
-  triangleRight: {
-    width: 0, height: 0,
-    borderTopWidth: 12, borderTopColor: 'transparent',
-    borderBottomWidth: 12, borderBottomColor: 'transparent',
-    borderLeftWidth: 14, borderLeftColor: '#000000',
+    flexDirection: 'row', alignItems: 'center', paddingHorizontal: 4,
   },
   optionCard: {
     flex: 1, backgroundColor: '#FFFFFF', borderRadius: 8,
     paddingVertical: 16, paddingHorizontal: 14,
     justifyContent: 'center', alignItems: 'center',
     minHeight: 56, borderWidth: 1, borderColor: '#E0E0E0',
+    position: 'relative', overflow: 'visible',
     ...Platform.select({
       ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4 },
       android: { elevation: 2 },
@@ -483,5 +471,27 @@ const styles = StyleSheet.create({
   optionText: {
     fontSize: 17, fontWeight: '800', textAlign: 'center',
     color: '#1A1A1A',
+  },
+  // Triangle LEFT: sits on left edge of card, points RIGHT (toward center)
+  triangleLeftWrap: {
+    position: 'absolute', left: -14, top: '50%',
+    marginTop: -14,
+  },
+  triangleLeft: {
+    width: 0, height: 0,
+    borderTopWidth: 14, borderTopColor: 'transparent',
+    borderBottomWidth: 14, borderBottomColor: 'transparent',
+    borderLeftWidth: 16, borderLeftColor: '#111111',
+  },
+  // Triangle RIGHT: sits on right edge of card, points LEFT (toward center)
+  triangleRightWrap: {
+    position: 'absolute', right: -14, top: '50%',
+    marginTop: -14,
+  },
+  triangleRight: {
+    width: 0, height: 0,
+    borderTopWidth: 14, borderTopColor: 'transparent',
+    borderBottomWidth: 14, borderBottomColor: 'transparent',
+    borderRightWidth: 16, borderRightColor: '#111111',
   },
 });
