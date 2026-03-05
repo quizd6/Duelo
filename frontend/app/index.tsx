@@ -9,7 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 
 const { width } = Dimensions.get('window');
-const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
+const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 
 export default function WelcomeScreen() {
   const router = useRouter();
@@ -67,14 +67,20 @@ export default function WelcomeScreen() {
   const checkPseudo = async (name: string) => {
     setChecking(true);
     try {
-      const res = await fetch(`${API_URL}/api/auth/check-pseudo`, {
+      const url = `${API_URL}/api/auth/check-pseudo`;
+      const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ pseudo: name }),
       });
       const data = await res.json();
       setAvailable(data.available);
-    } catch { setAvailable(null); }
+      setError('');
+    } catch (e: any) {
+      console.log('Check pseudo error:', e?.message, 'URL:', API_URL);
+      setAvailable(null);
+      setError('Connexion au serveur impossible');
+    }
     setChecking(false);
   };
 
@@ -94,7 +100,7 @@ export default function WelcomeScreen() {
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.detail || 'Erreur');
+        setError(data.detail || 'Erreur serveur');
         setLoading(false);
         return;
       }
@@ -102,8 +108,9 @@ export default function WelcomeScreen() {
       await AsyncStorage.setItem('duelo_pseudo', data.pseudo);
       await AsyncStorage.setItem('duelo_avatar_seed', data.avatar_seed);
       router.replace('/(tabs)/home');
-    } catch {
-      setError('Erreur de connexion');
+    } catch (e: any) {
+      console.log('Register error:', e?.message);
+      setError('Erreur réseau. Vérifiez votre connexion.');
     }
     setLoading(false);
   };
