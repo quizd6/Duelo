@@ -9,75 +9,79 @@ Application de quiz multijoueur compétitive avec esthétique "Dark Mode Premium
 - **Base de données**: Supabase (PostgreSQL) via SQLAlchemy + asyncpg
 - **Migrations**: Alembic
 
-## Fonctionnalités Implémentées (MVP)
+## Fonctionnalités Implémentées
 
 ### 1. Authentification
 - ✅ Mode Invité avec pseudo unique (vérification en temps réel)
-- ⬜ Sign in with Google (à implémenter)
-- ⬜ Sign in with Apple (à implémenter)
-- ⬜ Email/Mot de passe (backend prêt, UI à implémenter)
 
 ### 2. Système de Jeu
-- ✅ Matchmaking avec animation radar
-- ✅ Bot fallback après 5 secondes (pseudos et avatars réalistes)
-- ✅ 7 questions par match
-- ✅ Chronomètre 10 secondes
-- ✅ Scoring basé sur la vitesse (20pts max → 10pts min)
-- ✅ Feedback haptique (vibration) sur réponse
-- ✅ Feedback couleur (vert/rouge) sur bonne/mauvaise réponse
+- ✅ Matchmaking intelligent par catégorie (niveau +/- 5)
+- ✅ Bot fallback après 5 secondes
+- ✅ 7 questions par match, chronomètre 10s
+- ✅ Scoring basé sur la vitesse
 
 ### 3. Catégories
-- ✅ Séries TV Cultes (10 questions)
-- ✅ Géographie Mondiale (10 questions)
-- ✅ Histoire de France (10 questions)
+- ✅ Séries TV Cultes, Géographie Mondiale, Histoire de France (10 questions chacune)
 
-### 4. Progression
-- ✅ Système d'XP par catégorie
-- ✅ Niveaux 1-100
-- ✅ Titres débloquables (Novice → Divin)
-- ✅ Statistiques (matchs joués, victoires, win rate, best streak)
+### 4. Progression Par Catégorie
+- ✅ XP par catégorie (formule: 500 + (N-1)² × 10, cap niveau 50)
+- ✅ Titres de maîtrise débloquables (niveaux 1, 10, 20, 35, 50)
+- ✅ Sélection de titre à afficher
+- ✅ Modal de célébration à chaque nouveau titre
 
-### 5. Classements
-- ✅ Leaderboard Monde
-- ⬜ Classements par Ville/Région/Pays/Continent (IP geolocation à implémenter)
+### 5. Page Détail Catégorie + Mur Social ✅ NOUVEAU (2026-03-06)
+- ✅ Header catégorie (icône, nom, description)
+- ✅ Boutons Jouer / Suivre / Classement
+- ✅ Barre de progression questions complétées
+- ✅ Stats: niveau, followers, total questions
+- ✅ Classement par catégorie (modal)
+- ✅ Mur communautaire: posts texte + image
+- ✅ Likes (toggle) + Commentaires
+- ✅ Follow/Unfollow catégorie
 
-### 6. Partage
-- ✅ Carte de score en fin de match
-- ✅ Bouton "Défier un ami" (partage natif)
-- ⬜ Deep Link (à implémenter)
-
-### 7. Admin Dashboard
-- ✅ Route /admin-dashboard protégée par mot de passe
-- ✅ Sélecteur de catégorie
-- ✅ Zone de texte JSON
-- ✅ Bulk Import avec détection de doublons
-- ✅ Validation du format JSON
+### 6. Admin Dashboard
+- ✅ Import bulk de questions avec détection doublons
 
 ## Architecture Base de Données
-- **users**: id, pseudo (unique), email, password_hash, is_guest, city, region, country, continent, xp_series_tv, xp_geographie, xp_histoire, total_xp, matches_played, matches_won, best_streak, current_streak
-- **questions**: id, category, question_text (unique constraint), options (JSON), correct_option, difficulty
-- **matches**: id, player1_id, player2_pseudo, player2_is_bot, category, player1_score, player2_score, winner_id, questions_data (JSON)
+- **users**: id, pseudo, email, xp_series_tv, xp_geographie, xp_histoire, selected_title, mmr, stats...
+- **questions**: id, category, question_text, options, correct_option, difficulty
+- **matches**: id, player1_id, player2_pseudo, category, scores, xp_earned...
+- **category_follows**: id, user_id, category_id
+- **wall_posts**: id, user_id, category_id, content, image_base64
+- **post_likes**: id, user_id, post_id
+- **post_comments**: id, user_id, post_id, content
 
 ## API Endpoints
+### Auth
 - POST /api/auth/register-guest
-- POST /api/auth/register
-- POST /api/auth/login
-- GET /api/auth/user/{id}
 - POST /api/auth/check-pseudo
+- GET /api/auth/user/{id}
+
+### Game
 - GET /api/categories
 - GET /api/game/questions?category=X
 - POST /api/game/matchmaking
 - POST /api/game/submit
-- GET /api/leaderboard?scope=world
-- GET /api/profile/{user_id}
-- POST /api/admin/verify
-- POST /api/admin/import-questions
-- POST /api/admin/seed
 
-## Prochaines Étapes
-1. Authentification Google/Apple/Email
-2. Géolocalisation IP pour classements multi-niveaux
-3. Deep Links pour partage
-4. Matchmaking temps réel (WebSocket)
-5. Plus de catégories et questions
-6. Système de saisons et récompenses
+### Profile & Progression
+- GET /api/profile/{user_id}
+- POST /api/user/select-title
+- GET /api/leaderboard
+
+### Social Wall (NOUVEAU)
+- GET /api/category/{id}/detail?user_id=X
+- POST /api/category/{id}/follow
+- GET /api/category/{id}/leaderboard
+- GET /api/category/{id}/wall?user_id=X
+- POST /api/category/{id}/wall
+- POST /api/wall/{post_id}/like
+- POST /api/wall/{post_id}/comment
+- GET /api/wall/{post_id}/comments
+
+## Prochaines Étapes (Backlog)
+1. ⬜ Support vidéo dans les posts du mur
+2. ⬜ Plus de catégories et questions
+3. ⬜ Authentification Google/Apple
+4. ⬜ Deep Links pour partage
+5. ⬜ Matchmaking temps réel (WebSocket)
+6. ⬜ Système de saisons et récompenses
