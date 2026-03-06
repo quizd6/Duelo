@@ -1,14 +1,14 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, ScrollView, Animated, Dimensions, ActivityIndicator
+  View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 
-const { width } = Dimensions.get('window');
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
+const GRID_PAD = 16;
 
 const CATEGORY_ICONS: Record<string, string> = {
   series_tv: '📺',
@@ -38,25 +38,12 @@ type Category = {
   question_count: number;
 };
 
-const BADGE_MAP: Record<string, string> = { fire: '🔥', bolt: '⚡', glow: '✨' };
-
-function getStreakBadge(streak: number): string {
-  if (streak >= 10) return 'glow';
-  if (streak >= 5) return 'bolt';
-  if (streak >= 3) return 'fire';
-  return '';
-}
-
 export default function HomeScreen() {
   const router = useRouter();
   const [categories, setCategories] = useState<Category[]>([]);
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [pseudo, setPseudo] = useState('');
-  const [currentStreak, setCurrentStreak] = useState(0);
-  const [userLevel, setUserLevel] = useState(0);
-  const fadeAnims = useRef([new Animated.Value(0), new Animated.Value(0), new Animated.Value(0)]).current;
-  const playBtnAnim = useRef(new Animated.Value(0)).current;
+  const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
     loadData();
@@ -66,14 +53,12 @@ export default function HomeScreen() {
     const storedPseudo = await AsyncStorage.getItem('duelo_pseudo');
     if (storedPseudo) setPseudo(storedPseudo);
 
-    // Load user stats for streak display
     const userId = await AsyncStorage.getItem('duelo_user_id');
     if (userId) {
       try {
-        const userRes = await fetch(`${API_URL}/api/auth/user/${userId}`);
-        const userData = await userRes.json();
-        if (userData.current_streak !== undefined) setCurrentStreak(userData.current_streak);
-        if (userData.total_xp !== undefined) setUserLevel(userData.total_xp);
+        const unreadRes = await fetch(`${API_URL}/api/chat/unread-count/${userId}`);
+        const unreadData = await unreadRes.json();
+        setUnreadCount(unreadData.unread_count || 0);
       } catch {}
     }
 
@@ -81,31 +66,8 @@ export default function HomeScreen() {
       const res = await fetch(`${API_URL}/api/categories`);
       const data = await res.json();
       setCategories(data);
-      if (data.length > 0) setSelectedCategory(data[0].id);
     } catch {}
     setLoading(false);
-
-    // Stagger animations
-    fadeAnims.forEach((anim, i) => {
-      Animated.timing(anim, {
-        toValue: 1, duration: 400, delay: i * 150, useNativeDriver: true,
-      }).start();
-    });
-  };
-
-  const selectCategory = (id: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setSelectedCategory(id);
-    Animated.sequence([
-      Animated.timing(playBtnAnim, { toValue: 1.08, duration: 150, useNativeDriver: true }),
-      Animated.timing(playBtnAnim, { toValue: 1, duration: 150, useNativeDriver: true }),
-    ]).start();
-  };
-
-  const startGame = () => {
-    if (!selectedCategory) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    router.push(`/matchmaking?category=${selectedCategory}`);
   };
 
   if (loading) {
@@ -118,73 +80,60 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.greeting}>Salut,</Text>
-            <Text style={styles.playerName}>{pseudo || 'Joueur'}</Text>
-          </View>
-          <View style={styles.streakBadge}>
-            {currentStreak >= 3 ? (
-              <>
-                <Text style={styles.streakIcon}>{BADGE_MAP[getStreakBadge(currentStreak)] || '🔥'}</Text>
-                <Text style={[styles.streakText, { color: currentStreak >= 10 ? '#00FFFF' : currentStreak >= 5 ? '#FFA500' : '#FF6B35' }]}>{currentStreak}</Text>
-              </>
-            ) : (
-              <>
-                <Text style={styles.streakIcon}>⚡</Text>
-                <Text style={styles.streakText}>Prêt</Text>
-              </>
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>DUELO</Text>
+        <View style={styles.headerIcons}>
+          <TouchableOpacity
+            style={styles.headerIconBtn}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/(tabs)/players'); }}
+          >
+            <Text style={styles.headerIcon}>🔍</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.headerIconBtn}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/(tabs)/players'); }}
+          >
+            <Text style={styles.headerIcon}>💬</Text>
+            {unreadCount > 0 && (
+              <View style={styles.unreadDot}>
+                <Text style={styles.unreadDotText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+              </View>
             )}
-          </View>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.headerIconBtn}>
+            <Text style={styles.headerIcon}>⚙️</Text>
+          </TouchableOpacity>
         </View>
+      </View>
 
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        <Text style={styles.greeting}>Salut, {pseudo || 'Joueur'} 👋</Text>
         <Text style={styles.sectionTitle}>CHOISIS TA CATÉGORIE</Text>
 
-        <View style={styles.categoriesContainer}>
-          {categories.map((cat, index) => {
+        <View style={styles.categoriesGrid}>
+          {categories.map((cat) => {
             const color = CATEGORY_COLORS[cat.id] || '#8A2BE2';
             return (
-              <Animated.View
+              <TouchableOpacity
                 key={cat.id}
-                style={{ opacity: fadeAnims[index] || new Animated.Value(1) }}
+                testID={`category-${cat.id}`}
+                style={styles.categoryCard}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  router.push(`/category-detail?id=${cat.id}`);
+                }}
+                activeOpacity={0.7}
               >
-                <TouchableOpacity
-                  testID={`category-${cat.id}`}
-                  style={styles.categoryCard}
-                  onPress={() => router.push(`/category-detail?id=${cat.id}`)}
-                  activeOpacity={0.7}
-                >
+                <View style={[styles.categoryCardInner, { borderColor: color + '30' }]}>
                   <View style={[styles.categoryIconBox, { backgroundColor: color + '20' }]}>
                     <Text style={styles.categoryIcon}>{CATEGORY_ICONS[cat.id] || '❓'}</Text>
                   </View>
-                  <View style={styles.categoryInfo}>
-                    <Text style={styles.categoryName}>{cat.name}</Text>
-                    <Text style={styles.categoryCount}>{cat.question_count} questions</Text>
-                  </View>
-                  <Text style={[styles.categoryArrow, { color }]}>›</Text>
-                </TouchableOpacity>
-              </Animated.View>
+                  <Text style={[styles.categoryName, { color }]} numberOfLines={1}>{cat.name}</Text>
+                </View>
+              </TouchableOpacity>
             );
           })}
-        </View>
-
-        <View style={styles.statsRow}>
-          <View style={styles.statCard}>
-            <Text style={styles.statIcon}>🎯</Text>
-            <Text style={styles.statValue}>7</Text>
-            <Text style={styles.statLabel}>Questions</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statIcon}>⏱️</Text>
-            <Text style={styles.statValue}>10s</Text>
-            <Text style={styles.statLabel}>Par question</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statIcon}>⭐</Text>
-            <Text style={styles.statValue}>20</Text>
-            <Text style={styles.statLabel}>Max pts</Text>
-          </View>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -194,42 +143,52 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000' },
   loadingContainer: { flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' },
-  scroll: { paddingHorizontal: 20, paddingBottom: 30 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 20 },
-  greeting: { fontSize: 14, color: '#525252', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 2 },
-  playerName: { fontSize: 28, fontWeight: '800', color: '#FFF', marginTop: 2 },
-  streakBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8 },
-  streakIcon: { fontSize: 16, marginRight: 6 },
-  streakText: { color: '#A3A3A3', fontSize: 13, fontWeight: '600' },
-  sectionTitle: { fontSize: 12, fontWeight: '800', color: '#525252', letterSpacing: 3, marginBottom: 16, marginTop: 8 },
-  categoriesContainer: { gap: 12, marginBottom: 24 },
+  scroll: { paddingHorizontal: GRID_PAD, paddingBottom: 30 },
+
+  // Header
+  header: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: GRID_PAD, paddingVertical: 12,
+    borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)',
+  },
+  headerTitle: { fontSize: 20, fontWeight: '900', color: '#8A2BE2', letterSpacing: 4 },
+  headerIcons: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  headerIconBtn: { padding: 6, position: 'relative' },
+  headerIcon: { fontSize: 22 },
+  unreadDot: {
+    position: 'absolute', top: 0, right: 0,
+    minWidth: 16, height: 16, borderRadius: 8,
+    backgroundColor: '#FF3B30', justifyContent: 'center', alignItems: 'center',
+    paddingHorizontal: 3,
+  },
+  unreadDotText: { color: '#FFF', fontSize: 9, fontWeight: '800' },
+
+  greeting: { fontSize: 22, fontWeight: '800', color: '#FFF', marginTop: 20, marginBottom: 24 },
+
+  sectionTitle: {
+    fontSize: 12, fontWeight: '800', color: '#525252', letterSpacing: 3,
+    marginBottom: 16,
+  },
+
+  // Grid
+  categoriesGrid: {
+    flexDirection: 'row', flexWrap: 'wrap',
+  },
   categoryCard: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 16,
-    padding: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
+    width: '25%', padding: 5,
+    alignItems: 'center',
   },
-  categoryIconBox: { width: 52, height: 52, borderRadius: 14, justifyContent: 'center', alignItems: 'center', marginRight: 14 },
+  categoryCardInner: {
+    width: '100%', borderRadius: 16, padding: 10,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+  },
+  categoryIconBox: {
+    width: 48, height: 48, borderRadius: 14,
+    justifyContent: 'center', alignItems: 'center', marginBottom: 8,
+  },
   categoryIcon: { fontSize: 26 },
-  categoryInfo: { flex: 1 },
-  categoryName: { fontSize: 17, fontWeight: '700', color: '#FFF' },
-  categoryCount: { fontSize: 12, color: '#525252', marginTop: 2, fontWeight: '500' },
-  selectedDot: { width: 10, height: 10, borderRadius: 5 },
-  categoryArrow: { fontSize: 28, fontWeight: '300' },
-  playButton: {
-    flexDirection: 'row', justifyContent: 'center', alignItems: 'center',
-    backgroundColor: '#8A2BE2', borderRadius: 16, padding: 20,
-    shadowColor: '#8A2BE2', shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.5, shadowRadius: 16, elevation: 10, marginBottom: 24,
-  },
-  playButtonDisabled: { opacity: 0.3 },
-  playButtonIcon: { fontSize: 20, marginRight: 10 },
-  playButtonText: { color: '#FFF', fontSize: 18, fontWeight: '900', letterSpacing: 3 },
-  statsRow: { flexDirection: 'row', gap: 12 },
-  statCard: {
-    flex: 1, backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 14,
-    padding: 14, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
-  },
-  statIcon: { fontSize: 20, marginBottom: 6 },
-  statValue: { fontSize: 22, fontWeight: '800', color: '#FFF' },
-  statLabel: { fontSize: 10, color: '#525252', marginTop: 2, fontWeight: '600', textTransform: 'uppercase' },
+  categoryName: { fontSize: 11, fontWeight: '800', textAlign: 'center', marginBottom: 4 },
+  categoryCount: { fontSize: 10, color: '#525252', fontWeight: '600' },
 });

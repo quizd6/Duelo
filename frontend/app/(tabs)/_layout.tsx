@@ -11,6 +11,17 @@ function TabIcon({ label, focused, icon }: { label: string; focused: boolean; ic
   );
 }
 
+function PlayTabIcon({ focused }: { focused: boolean }) {
+  return (
+    <View style={styles.playTabWrap}>
+      <View style={[styles.playTabCircle, focused && styles.playTabCircleActive]}>
+        <Text style={styles.playTabIcon}>⚔️</Text>
+      </View>
+      <Text style={[styles.tabLabel, focused && styles.tabLabelActive, { marginTop: 4 }]}>Jouer</Text>
+    </View>
+  );
+}
+
 export default function TabLayout() {
   return (
     <Tabs
@@ -23,15 +34,27 @@ export default function TabLayout() {
       }}
     >
       <Tabs.Screen
-        name="home"
+        name="accueil"
         options={{
-          tabBarIcon: ({ focused }) => <TabIcon label="Jouer" focused={focused} icon="⚔️" />,
+          tabBarIcon: ({ focused }) => <TabIcon label="Accueil" focused={focused} icon="🏠" />,
         }}
       />
       <Tabs.Screen
         name="players"
         options={{
           tabBarIcon: ({ focused }) => <TabIcon label="Joueurs" focused={focused} icon="👥" />,
+        }}
+      />
+      <Tabs.Screen
+        name="home"
+        options={{
+          tabBarIcon: ({ focused }) => <PlayTabIcon focused={focused} />,
+        }}
+      />
+      <Tabs.Screen
+        name="themes"
+        options={{
+          tabBarIcon: ({ focused }) => <TabIcon label="Thèmes" focused={focused} icon="📚" />,
         }}
       />
       <Tabs.Screen
@@ -70,4 +93,16 @@ const styles = StyleSheet.create({
     shadowColor: '#8A2BE2', shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.8, shadowRadius: 4,
   },
+  playTabWrap: { alignItems: 'center', justifyContent: 'center', marginTop: -12 },
+  playTabCircle: {
+    width: 52, height: 52, borderRadius: 26,
+    backgroundColor: '#8A2BE2', justifyContent: 'center', alignItems: 'center',
+    shadowColor: '#8A2BE2', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5, shadowRadius: 12, elevation: 8,
+  },
+  playTabCircleActive: {
+    backgroundColor: '#9B3FFF',
+    shadowOpacity: 0.8, shadowRadius: 16,
+  },
+  playTabIcon: { fontSize: 24 },
 });

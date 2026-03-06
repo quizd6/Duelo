@@ -154,7 +154,9 @@ def get_cumulative_xp(level: int) -> int:
     return total
 
 def get_category_level(xp: int) -> int:
-    """Calculate level from category XP. Cap at 50."""
+    """Calculate level from category XP. Cap at 50. Level 0 if no XP."""
+    if xp <= 0:
+        return 0
     level = 1
     cumulative = 0
     while level < MAX_LEVEL:
@@ -169,6 +171,14 @@ def get_xp_progress(xp: int, level: int) -> dict:
     """Get XP progress within current level."""
     if level >= MAX_LEVEL:
         return {"current": 0, "needed": 1, "progress": 1.0}
+    if level == 0:
+        # Level 0 → 1: need 500 XP (first level threshold)
+        needed = xp_for_next_level(1)
+        return {
+            "current": xp,
+            "needed": needed,
+            "progress": round(min(xp / max(needed, 1), 1.0), 3)
+        }
     current_level_xp = get_cumulative_xp(level)
     next_level_xp = get_cumulative_xp(level + 1)
     xp_in_level = xp - current_level_xp
@@ -505,8 +515,8 @@ def ensure_season(user):
 @api_router.post("/game/matchmaking")
 async def start_matchmaking(data: MatchmakingRequest, db: AsyncSession = Depends(get_db)):
     """Returns a bot opponent with category-matched level."""
-    player_level = 1
-    player_title = get_category_title(data.category, 1)
+    player_level = 0
+    player_title = ""
 
     if data.player_id:
         result = await db.execute(select(User).where(User.id == data.player_id))
@@ -518,7 +528,7 @@ async def start_matchmaking(data: MatchmakingRequest, db: AsyncSession = Depends
             player_title = get_category_title(data.category, player_level)
 
     # Bot with similar category level (+/- 5)
-    bot_level = max(1, min(MAX_LEVEL, player_level + random.randint(-5, 5)))
+    bot_level = max(0, min(MAX_LEVEL, player_level + random.randint(-5, 5)))
     bot_name = random.choice(BOT_NAMES)
     bot_seed = secrets.token_hex(4)
     bot_title = get_category_title(data.category, bot_level)
@@ -824,12 +834,12 @@ async def get_category_detail(category_id: str, user_id: Optional[str] = None, d
     followers_count = f_count.scalar() or 0
 
     # User-specific data
-    user_level = 1
-    user_title = get_category_title(category_id, 1)
+    user_level = 0
+    user_title = ""
     user_xp = 0
     is_following = False
     completion_pct = 0
-    xp_progress = get_xp_progress(0, 1)
+    xp_progress = get_xp_progress(0, 0)
 
     if user_id:
         result = await db.execute(select(User).where(User.id == user_id))
