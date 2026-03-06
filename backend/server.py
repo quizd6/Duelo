@@ -81,6 +81,10 @@ class MatchSubmit(BaseModel):
     opponent_level: int = 1
     questions_data: Optional[list] = None
 
+class MatchmakingRequest(BaseModel):
+    category: str = "series_tv"
+    player_id: Optional[str] = None
+
 class MatchResponse(BaseModel):
     id: str
     player1_id: str
@@ -93,7 +97,13 @@ class MatchResponse(BaseModel):
     winner_id: Optional[str] = None
     xp_earned: int = 0
     xp_breakdown: Optional[dict] = None
+    new_title: Optional[dict] = None
+    new_level: Optional[int] = None
     created_at: str
+
+class SelectTitleRequest(BaseModel):
+    user_id: str
+    title: str
 
 class BulkImportRequest(BaseModel):
     category: str
@@ -120,30 +130,117 @@ def verify_password(password: str, stored: str) -> bool:
     salt, hashed = stored.split(':')
     return hashlib.sha256((password + salt).encode()).hexdigest() == hashed
 
-XP_LEVELS = {
-    1: 0, 2: 100, 3: 250, 4: 450, 5: 700, 6: 1000, 7: 1400, 8: 1900, 9: 2500, 10: 3200,
-    15: 6000, 20: 10000, 30: 20000, 50: 50000, 75: 100000, 100: 200000
-}
+# ── Per-Category Level System ──
+# Formula: XP needed for level N → N+1 = 500 + (N-1)² × 10
+# Cap: Level 50
 
-TITLES = [
-    (0, "Novice"), (500, "Apprenti"), (1500, "Challenger"), (3000, "Expert"),
-    (6000, "Maître"), (12000, "Grand Maître"), (25000, "Champion"), (50000, "Légende"),
-    (100000, "Mythique"), (200000, "Divin")
-]
+MAX_LEVEL = 50
 
-def get_level(xp: int) -> int:
+def xp_for_next_level(level: int) -> int:
+    """XP needed to go from level to level+1."""
+    return 500 + (level - 1) ** 2 * 10
+
+def get_cumulative_xp(level: int) -> int:
+    """Total XP needed to reach a specific level."""
+    total = 0
+    for l in range(1, level):
+        total += xp_for_next_level(l)
+    return total
+
+def get_category_level(xp: int) -> int:
+    """Calculate level from category XP. Cap at 50."""
     level = 1
-    for lvl, required in sorted(XP_LEVELS.items()):
-        if xp >= required:
-            level = lvl
+    cumulative = 0
+    while level < MAX_LEVEL:
+        needed = xp_for_next_level(level)
+        if cumulative + needed > xp:
+            break
+        cumulative += needed
+        level += 1
     return level
 
-def get_title(xp: int) -> str:
-    title = "Novice"
-    for required, t in TITLES:
-        if xp >= required:
-            title = t
-    return title
+def get_xp_progress(xp: int, level: int) -> dict:
+    """Get XP progress within current level."""
+    if level >= MAX_LEVEL:
+        return {"current": 0, "needed": 1, "progress": 1.0}
+    current_level_xp = get_cumulative_xp(level)
+    next_level_xp = get_cumulative_xp(level + 1)
+    xp_in_level = xp - current_level_xp
+    xp_needed = next_level_xp - current_level_xp
+    return {
+        "current": xp_in_level,
+        "needed": xp_needed,
+        "progress": round(min(xp_in_level / max(xp_needed, 1), 1.0), 3)
+    }
+
+# ── Category Titles (unlocked at levels 1, 10, 20, 35, 50) ──
+
+TITLE_THRESHOLDS = [1, 10, 20, 35, 50]
+
+CATEGORY_TITLES = {
+    "series_tv": {
+        1: "Téléspectateur",
+        10: "Binge-watcher",
+        20: "Critique",
+        35: "Showrunner",
+        50: "Légende du Petit Écran",
+    },
+    "geographie": {
+        1: "Touriste",
+        10: "Explorateur",
+        20: "Globe-trotter",
+        35: "Cartographe",
+        50: "Maître du Monde",
+    },
+    "histoire": {
+        1: "Élève",
+        10: "Chroniqueur",
+        20: "Historien",
+        35: "Archiviste Royal",
+        50: "Gardien du Temps",
+    },
+}
+
+def get_category_title(category: str, level: int) -> str:
+    """Get the highest unlocked title for a category at given level."""
+    titles = CATEGORY_TITLES.get(category, {})
+    current_title = ""
+    for threshold in sorted(titles.keys()):
+        if level >= threshold:
+            current_title = titles[threshold]
+    return current_title
+
+def get_unlocked_titles_for_category(category: str, level: int) -> list:
+    """Get all unlocked titles for a category at given level."""
+    titles = CATEGORY_TITLES.get(category, {})
+    unlocked = []
+    for threshold in sorted(titles.keys()):
+        if level >= threshold:
+            unlocked.append({"level": threshold, "title": titles[threshold]})
+    return unlocked
+
+def get_all_unlocked_titles(user) -> list:
+    """Get all unlocked titles across all categories for a user."""
+    all_titles = []
+    for cat_key, xp_field in CATEGORY_XP_FIELD.items():
+        cat_xp = getattr(user, xp_field, 0)
+        cat_level = get_category_level(cat_xp)
+        for t in get_unlocked_titles_for_category(cat_key, cat_level):
+            all_titles.append({**t, "category": cat_key})
+    return all_titles
+
+def check_new_title(category: str, level_before: int, level_after: int):
+    """Check if a new title was unlocked. Return highest new one."""
+    if level_before >= level_after:
+        return None
+    titles = CATEGORY_TITLES.get(category, {})
+    new_title = None
+    for threshold in TITLE_THRESHOLDS:
+        if level_before < threshold <= level_after:
+            title = titles.get(threshold)
+            if title:
+                new_title = {"level": threshold, "title": title, "category": category}
+    return new_title
 
 BOT_NAMES = [
     "NeoQuizzer", "BrainStorm_42", "QuizNinja_FR", "Le_Sage_77", "MindBlaster",
@@ -347,18 +444,38 @@ def ensure_season(user):
 
 
 @api_router.post("/game/matchmaking")
-async def start_matchmaking(db: AsyncSession = Depends(get_db)):
-    """Returns a bot opponent with realistic stats."""
+async def start_matchmaking(data: MatchmakingRequest, db: AsyncSession = Depends(get_db)):
+    """Returns a bot opponent with category-matched level."""
+    player_level = 1
+    player_title = get_category_title(data.category, 1)
+
+    if data.player_id:
+        result = await db.execute(select(User).where(User.id == data.player_id))
+        user = result.scalar_one_or_none()
+        if user:
+            xp_field = CATEGORY_XP_FIELD.get(data.category)
+            player_xp = getattr(user, xp_field, 0) if xp_field else 0
+            player_level = get_category_level(player_xp)
+            player_title = get_category_title(data.category, player_level)
+
+    # Bot with similar category level (+/- 5)
+    bot_level = max(1, min(MAX_LEVEL, player_level + random.randint(-5, 5)))
     bot_name = random.choice(BOT_NAMES)
     bot_seed = secrets.token_hex(4)
-    bot_level = random.randint(1, 40)
+    bot_title = get_category_title(data.category, bot_level)
     bot_streak = random.choice([0, 0, 0, 1, 2, 3, 4, 5])
+
     return {
+        "player": {
+            "level": player_level,
+            "title": player_title,
+        },
         "opponent": {
             "pseudo": bot_name,
             "avatar_seed": bot_seed,
             "is_bot": True,
             "level": bot_level,
+            "title": bot_title,
             "streak": bot_streak,
             "streak_badge": get_streak_badge(bot_streak),
         }
@@ -373,14 +490,18 @@ async def submit_match(data: MatchSubmit, db: AsyncSession = Depends(get_db)):
     won = data.player_score > data.opponent_score
     perfect = data.correct_count == TOTAL_QUESTIONS
 
+    # ── Level BEFORE XP gain ──
+    xp_field = CATEGORY_XP_FIELD.get(data.category)
+    cat_xp_before = getattr(user, xp_field, 0) if (user and xp_field) else 0
+    level_before = get_category_level(cat_xp_before)
+
     # ── XP Calculation ──
     base_xp = data.player_score * 2
     victory_bonus = 50 if won else 0
     perfection_bonus = 50 if perfect else 0
 
     # Giant Slayer: beat opponent 15+ levels higher
-    player_level = get_level(user.total_xp) if user else 1
-    giant_slayer_bonus = 100 if (won and data.opponent_level - player_level >= 15) else 0
+    giant_slayer_bonus = 100 if (won and data.opponent_level - level_before >= 15) else 0
 
     # Streak bonus (calculated AFTER updating streak)
     new_streak = (user.current_streak + 1) if (user and won) else 0
@@ -414,6 +535,8 @@ async def submit_match(data: MatchSubmit, db: AsyncSession = Depends(get_db)):
     db.add(match)
 
     # ── Update user ──
+    new_title_info = None
+    new_level = None
     if user:
         user.matches_played += 1
 
@@ -426,7 +549,6 @@ async def submit_match(data: MatchSubmit, db: AsyncSession = Depends(get_db)):
             user.current_streak = 0
 
         # All-Time XP
-        xp_field = CATEGORY_XP_FIELD.get(data.category)
         if xp_field:
             setattr(user, xp_field, getattr(user, xp_field, 0) + total_xp)
         user.total_xp = user.xp_series_tv + user.xp_geographie + user.xp_histoire
@@ -449,6 +571,13 @@ async def submit_match(data: MatchSubmit, db: AsyncSession = Depends(get_db)):
             user.mmr -= k * expected
         user.mmr = max(100, min(3000, user.mmr))
 
+        # ── Check for new title ──
+        cat_xp_after = getattr(user, xp_field, 0) if xp_field else 0
+        level_after = get_category_level(cat_xp_after)
+        new_title_info = check_new_title(data.category, level_before, level_after)
+        if level_after > level_before:
+            new_level = level_after
+
     await db.commit()
     await db.refresh(match)
 
@@ -458,7 +587,10 @@ async def submit_match(data: MatchSubmit, db: AsyncSession = Depends(get_db)):
         category=match.category, player1_score=match.player1_score,
         player2_score=match.player2_score, player1_correct=match.player1_correct,
         winner_id=match.winner_id, xp_earned=match.xp_earned,
-        xp_breakdown=match.xp_breakdown, created_at=match.created_at.isoformat(),
+        xp_breakdown=match.xp_breakdown,
+        new_title=new_title_info,
+        new_level=new_level,
+        created_at=match.created_at.isoformat(),
     )
 
 
@@ -491,8 +623,6 @@ async def get_leaderboard(
             "matches_won": u.matches_won,
             "current_streak": u.current_streak,
             "streak_badge": get_streak_badge(u.current_streak),
-            "level": get_level(u.total_xp),
-            "title": get_title(u.total_xp),
             "rank": i + 1,
         })
     return entries
@@ -513,22 +643,37 @@ async def get_profile(user_id: str, db: AsyncSession = Depends(get_db)):
     )
     matches = result.scalars().all()
 
-    level = get_level(user.total_xp)
+    # Per-category stats
+    categories_data = {}
+    for cat_key, xp_field in CATEGORY_XP_FIELD.items():
+        cat_xp = getattr(user, xp_field, 0)
+        cat_level = get_category_level(cat_xp)
+        cat_title = get_category_title(cat_key, cat_level)
+        cat_progress = get_xp_progress(cat_xp, cat_level)
+        unlocked = get_unlocked_titles_for_category(cat_key, cat_level)
+        categories_data[cat_key] = {
+            "xp": cat_xp,
+            "level": cat_level,
+            "title": cat_title,
+            "xp_progress": cat_progress,
+            "unlocked_titles": unlocked,
+        }
+
+    all_titles = get_all_unlocked_titles(user)
 
     return {
         "user": {
             "id": user.id, "pseudo": user.pseudo, "avatar_seed": user.avatar_seed,
             "is_guest": user.is_guest, "total_xp": user.total_xp,
-            "xp_series_tv": user.xp_series_tv, "xp_geographie": user.xp_geographie,
-            "xp_histoire": user.xp_histoire,
-            "seasonal_total_xp": user.seasonal_total_xp or 0,
-            "level": level, "title": get_title(user.total_xp),
+            "selected_title": user.selected_title,
+            "categories": categories_data,
             "matches_played": user.matches_played, "matches_won": user.matches_won,
             "best_streak": user.best_streak, "current_streak": user.current_streak,
             "streak_badge": get_streak_badge(user.current_streak),
             "win_rate": round(user.matches_won / max(user.matches_played, 1) * 100),
             "mmr": round(user.mmr or 1000),
         },
+        "all_unlocked_titles": all_titles,
         "match_history": [
             {
                 "id": m.id, "category": m.category,
@@ -541,6 +686,26 @@ async def get_profile(user_id: str, db: AsyncSession = Depends(get_db)):
             } for m in matches
         ]
     }
+
+
+# ── Select Title ──
+
+@api_router.post("/user/select-title")
+async def select_title(data: SelectTitleRequest, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(User).where(User.id == data.user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
+
+    # Verify title is actually unlocked
+    all_titles = get_all_unlocked_titles(user)
+    unlocked_names = [t["title"] for t in all_titles]
+    if data.title not in unlocked_names:
+        raise HTTPException(status_code=400, detail="Ce titre n'est pas encore débloqué")
+
+    user.selected_title = data.title
+    await db.commit()
+    return {"success": True, "selected_title": data.title}
 
 
 # ── Admin Routes ──

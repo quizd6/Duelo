@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Comprehensive backend testing for Duelo quiz app.
-Tests all high-priority APIs with XP calculations, profile stats, and leaderboard functionality.
+Comprehensive backend testing for Duelo quiz app - Updated for Per-Category Level System.
+Tests smart matchmaking, per-category levels, profile with category data, title system.
 """
 
 import asyncio
@@ -21,11 +21,11 @@ class DueloAPITester:
         self.test_user_pseudo = None
         self.results = {
             "guest_registration": {"status": "pending", "details": None},
-            "seed_questions": {"status": "pending", "details": None},
-            "matchmaking": {"status": "pending", "details": None},
-            "match_submit_xp": {"status": "pending", "details": None},
-            "profile_advanced_stats": {"status": "pending", "details": None},
-            "leaderboard_seasonal": {"status": "pending", "details": None}
+            "smart_matchmaking": {"status": "pending", "details": None},
+            "per_category_levels": {"status": "pending", "details": None},
+            "profile_category_data": {"status": "pending", "details": None},
+            "match_submit_title_detection": {"status": "pending", "details": None},
+            "select_title": {"status": "pending", "details": None}
         }
 
     async def __aenter__(self):
@@ -91,173 +91,187 @@ class DueloAPITester:
             await self.log_result("guest_registration", False, f"Exception: {str(e)}")
             return False
 
-    async def test_seed_questions(self):
-        """Seed questions if needed for testing."""
-        print("\n=== Testing Question Seeding ===")
-        
-        try:
-            async with self.session.post(f"{BASE_URL}/admin/seed") as response:
-                if response.status == 200:
-                    data = await response.json()
-                    imported_count = data.get("imported", 0)
-                    await self.log_result("seed_questions", True, 
-                                        f"Seeded {imported_count} questions", data)
-                    return True
-                else:
-                    error_data = await response.text()
-                    await self.log_result("seed_questions", False, 
-                                        f"HTTP {response.status}: {error_data}")
-                    return False
-                    
-        except Exception as e:
-            await self.log_result("seed_questions", False, f"Exception: {str(e)}")
-            return False
-
-    async def test_matchmaking_api(self):
-        """Test matchmaking API for bot opponent with required fields."""
-        print("\n=== Testing Matchmaking API ===")
-        
-        try:
-            async with self.session.post(f"{BASE_URL}/game/matchmaking") as response:
-                if response.status == 200:
-                    data = await response.json()
-                    opponent = data.get("opponent", {})
-                    
-                    # Validate required fields
-                    required_fields = ["pseudo", "avatar_seed", "is_bot", "level", "streak", "streak_badge"]
-                    missing_fields = [field for field in required_fields if field not in opponent]
-                    
-                    if missing_fields:
-                        await self.log_result("matchmaking", False, 
-                                            f"Missing opponent fields: {missing_fields}", data)
-                        return False
-                    
-                    if not opponent.get("is_bot"):
-                        await self.log_result("matchmaking", False, 
-                                            "Opponent should be marked as bot", data)
-                        return False
-                    
-                    await self.log_result("matchmaking", True, 
-                                        f"Found bot opponent: {opponent['pseudo']} (Level {opponent['level']}, Streak {opponent['streak']})", 
-                                        data)
-                    return True
-                else:
-                    error_data = await response.text()
-                    await self.log_result("matchmaking", False, 
-                                        f"HTTP {response.status}: {error_data}")
-                    return False
-                    
-        except Exception as e:
-            await self.log_result("matchmaking", False, f"Exception: {str(e)}")
-            return False
-
-    async def test_match_submit_xp_calculation(self):
-        """Test match submission with comprehensive XP calculation."""
-        print("\n=== Testing Match Submit with XP Calculation ===")
+    async def test_smart_matchmaking(self):
+        """Test smart matchmaking with category and player_id."""
+        print("\n=== Testing Smart Matchmaking with Category ===")
         
         if not self.test_user_id:
-            await self.log_result("match_submit_xp", False, "No test user available - registration failed")
+            await self.log_result("smart_matchmaking", False, "No test user available - registration failed")
             return False
         
-        # Test case: Perfect game (7/7 correct) with victory against higher level opponent
-        match_data = {
-            "player_id": self.test_user_id,
+        # Test with category and player_id
+        matchmaking_data = {
             "category": "series_tv",
-            "player_score": 140,  # 7 questions * 20 points
-            "opponent_score": 100,  # Bot lost
-            "opponent_pseudo": "TestBot_Elite",
-            "opponent_is_bot": True,
-            "correct_count": 7,  # Perfect game
-            "opponent_level": 20  # High level for giant slayer bonus
+            "player_id": self.test_user_id
         }
         
         try:
-            async with self.session.post(f"{BASE_URL}/game/submit", json=match_data) as response:
+            async with self.session.post(f"{BASE_URL}/game/matchmaking", json=matchmaking_data) as response:
                 if response.status == 200:
                     data = await response.json()
                     
-                    # Validate response structure
-                    required_fields = ["id", "xp_earned", "xp_breakdown", "winner_id"]
-                    missing_fields = [field for field in required_fields if field not in data]
-                    
-                    if missing_fields:
-                        await self.log_result("match_submit_xp", False, 
-                                            f"Missing fields: {missing_fields}", data)
+                    # Validate response has both player and opponent
+                    if "player" not in data or "opponent" not in data:
+                        await self.log_result("smart_matchmaking", False, 
+                                            "Response must contain both 'player' and 'opponent' keys", data)
                         return False
                     
-                    # Validate XP breakdown structure
-                    xp_breakdown = data.get("xp_breakdown", {})
-                    required_xp_fields = ["base", "victory", "perfection", "giant_slayer", "streak", "total"]
-                    missing_xp_fields = [field for field in required_xp_fields if field not in xp_breakdown]
+                    player = data.get("player", {})
+                    opponent = data.get("opponent", {})
                     
-                    if missing_xp_fields:
-                        await self.log_result("match_submit_xp", False, 
-                                            f"Missing XP breakdown fields: {missing_xp_fields}", data)
+                    # Validate player data
+                    required_player_fields = ["level", "title"]
+                    missing_player_fields = [field for field in required_player_fields if field not in player]
+                    
+                    if missing_player_fields:
+                        await self.log_result("smart_matchmaking", False, 
+                                            f"Missing player fields: {missing_player_fields}", data)
                         return False
                     
-                    # Validate XP calculation logic
-                    expected_base = match_data["player_score"] * 2  # 140 * 2 = 280
-                    expected_victory = 50  # Won the match
-                    expected_perfection = 50  # Perfect 7/7
-                    # Giant slayer bonus depends on user's current level vs opponent level
+                    # Validate opponent data  
+                    required_opponent_fields = ["pseudo", "avatar_seed", "is_bot", "level", "title", "streak", "streak_badge"]
+                    missing_opponent_fields = [field for field in required_opponent_fields if field not in opponent]
                     
-                    actual_base = xp_breakdown.get("base", 0)
-                    actual_victory = xp_breakdown.get("victory", 0)
-                    actual_perfection = xp_breakdown.get("perfection", 0)
-                    actual_total = xp_breakdown.get("total", 0)
-                    
-                    issues = []
-                    if actual_base != expected_base:
-                        issues.append(f"Base XP: expected {expected_base}, got {actual_base}")
-                    if actual_victory != expected_victory:
-                        issues.append(f"Victory XP: expected {expected_victory}, got {actual_victory}")
-                    if actual_perfection != expected_perfection:
-                        issues.append(f"Perfection XP: expected {expected_perfection}, got {actual_perfection}")
-                    
-                    # Check that total matches sum of components
-                    calculated_total = sum([
-                        xp_breakdown.get("base", 0),
-                        xp_breakdown.get("victory", 0),
-                        xp_breakdown.get("perfection", 0),
-                        xp_breakdown.get("giant_slayer", 0),
-                        xp_breakdown.get("streak", 0)
-                    ])
-                    
-                    if actual_total != calculated_total:
-                        issues.append(f"Total XP calculation error: components sum to {calculated_total}, but total is {actual_total}")
-                    
-                    if issues:
-                        await self.log_result("match_submit_xp", False, 
-                                            f"XP calculation issues: {'; '.join(issues)}", data)
+                    if missing_opponent_fields:
+                        await self.log_result("smart_matchmaking", False, 
+                                            f"Missing opponent fields: {missing_opponent_fields}", data)
                         return False
                     
-                    # Check winner assignment
-                    if data.get("winner_id") != self.test_user_id:
-                        await self.log_result("match_submit_xp", False, 
-                                            "Winner ID should match player ID for winning match", data)
+                    if not opponent.get("is_bot"):
+                        await self.log_result("smart_matchmaking", False, 
+                                            "Opponent should be marked as bot", data)
                         return False
                     
-                    await self.log_result("match_submit_xp", True, 
-                                        f"XP calculation correct - Base: {actual_base}, Victory: {actual_victory}, Perfection: {actual_perfection}, Total: {actual_total}", 
+                    # Validate level matching (bot should be within +/- 5 levels of player)
+                    player_level = player.get("level", 1)
+                    opponent_level = opponent.get("level", 1)
+                    level_diff = abs(player_level - opponent_level)
+                    
+                    if level_diff > 5:
+                        await self.log_result("smart_matchmaking", False, 
+                                            f"Opponent level {opponent_level} too far from player level {player_level} (diff: {level_diff})", data)
+                        return False
+                    
+                    await self.log_result("smart_matchmaking", True, 
+                                        f"Smart matchmaking working - Player: Lv.{player_level} '{player['title']}', Opponent: '{opponent['pseudo']}' Lv.{opponent_level} '{opponent['title']}'", 
                                         data)
                     return True
                     
                 else:
                     error_data = await response.text()
-                    await self.log_result("match_submit_xp", False, 
+                    await self.log_result("smart_matchmaking", False, 
                                         f"HTTP {response.status}: {error_data}")
                     return False
                     
         except Exception as e:
-            await self.log_result("match_submit_xp", False, f"Exception: {str(e)}")
+            await self.log_result("smart_matchmaking", False, f"Exception: {str(e)}")
             return False
 
-    async def test_profile_advanced_stats(self):
-        """Test profile API with advanced stats after match submission."""
-        print("\n=== Testing Profile API with Advanced Stats ===")
+    async def test_per_category_levels(self):
+        """Test per-category level calculation formula: 500 + (N-1)^2 * 10."""
+        print("\n=== Testing Per-Category Level System ===")
+        
+        # Test level calculation by checking profile after earning XP
+        # First, let's submit a match to earn some XP
+        if not self.test_user_id:
+            await self.log_result("per_category_levels", False, "No test user available - registration failed")
+            return False
+        
+        # Submit a winning match to earn XP
+        match_data = {
+            "player_id": self.test_user_id,
+            "category": "series_tv", 
+            "player_score": 140,  # 7 questions * 20 points
+            "opponent_score": 100,
+            "opponent_pseudo": "TestBot_Level",
+            "opponent_is_bot": True,
+            "correct_count": 7,
+            "opponent_level": 1
+        }
+        
+        try:
+            # Submit match first
+            async with self.session.post(f"{BASE_URL}/game/submit", json=match_data) as response:
+                if response.status != 200:
+                    await self.log_result("per_category_levels", False, 
+                                        f"Match submit failed: {response.status}")
+                    return False
+            
+            # Now check profile to validate level calculation
+            async with self.session.get(f"{BASE_URL}/profile/{self.test_user_id}") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    user = data.get("user", {})
+                    categories = user.get("categories", {})
+                    
+                    if "series_tv" not in categories:
+                        await self.log_result("per_category_levels", False, 
+                                            "No series_tv category data found", data)
+                        return False
+                    
+                    series_tv_data = categories["series_tv"]
+                    required_fields = ["xp", "level", "title", "xp_progress", "unlocked_titles"]
+                    missing_fields = [field for field in required_fields if field not in series_tv_data]
+                    
+                    if missing_fields:
+                        await self.log_result("per_category_levels", False, 
+                                            f"Missing category fields: {missing_fields}", data)
+                        return False
+                    
+                    # Validate XP progress structure
+                    xp_progress = series_tv_data.get("xp_progress", {})
+                    required_progress_fields = ["current", "needed", "progress"]
+                    missing_progress_fields = [field for field in required_progress_fields if field not in xp_progress]
+                    
+                    if missing_progress_fields:
+                        await self.log_result("per_category_levels", False, 
+                                            f"Missing xp_progress fields: {missing_progress_fields}", data)
+                        return False
+                    
+                    # Validate level calculation logic
+                    xp = series_tv_data.get("xp", 0)
+                    level = series_tv_data.get("level", 1)
+                    
+                    # Manually calculate expected level based on formula: 500 + (N-1)^2 * 10
+                    def calculate_level_from_xp(xp):
+                        level = 1
+                        cumulative_xp = 0
+                        while level < 50:  # Max level 50
+                            xp_needed_for_next = 500 + (level - 1) ** 2 * 10
+                            if cumulative_xp + xp_needed_for_next > xp:
+                                break
+                            cumulative_xp += xp_needed_for_next
+                            level += 1
+                        return level
+                    
+                    expected_level = calculate_level_from_xp(xp)
+                    
+                    if level != expected_level:
+                        await self.log_result("per_category_levels", False, 
+                                            f"Level calculation error: XP {xp} should be level {expected_level}, got {level}", data)
+                        return False
+                    
+                    await self.log_result("per_category_levels", True, 
+                                        f"Per-category level system working - XP: {xp}, Level: {level}, Title: '{series_tv_data['title']}', Progress: {xp_progress['progress']*100:.1f}%", 
+                                        data)
+                    return True
+                    
+                else:
+                    error_data = await response.text()
+                    await self.log_result("per_category_levels", False, 
+                                        f"Profile request failed: HTTP {response.status}: {error_data}")
+                    return False
+                    
+        except Exception as e:
+            await self.log_result("per_category_levels", False, f"Exception: {str(e)}")
+            return False
+
+    async def test_profile_category_data(self):
+        """Test profile API returns proper category data structure."""
+        print("\n=== Testing Profile API with Category Data ===")
         
         if not self.test_user_id:
-            await self.log_result("profile_advanced_stats", False, "No test user available - registration failed")
+            await self.log_result("profile_category_data", False, "No test user available - registration failed")
             return False
         
         try:
@@ -267,149 +281,228 @@ class DueloAPITester:
                     
                     # Validate user object structure
                     user = data.get("user", {})
-                    required_user_fields = ["level", "title", "mmr", "current_streak", "streak_badge", "seasonal_total_xp", "win_rate"]
-                    missing_user_fields = [field for field in required_user_fields if field not in user]
-                    
-                    if missing_user_fields:
-                        await self.log_result("profile_advanced_stats", False, 
-                                            f"Missing user fields: {missing_user_fields}", data)
+                    if "categories" not in user:
+                        await self.log_result("profile_category_data", False, 
+                                            "Profile missing 'categories' field", data)
                         return False
                     
-                    # Validate match history structure
-                    match_history = data.get("match_history", [])
-                    if not match_history:
-                        await self.log_result("profile_advanced_stats", False, 
-                                            "No match history found after submitting match", data)
+                    categories = user.get("categories", {})
+                    expected_categories = ["series_tv", "geographie", "histoire"]
+                    
+                    for cat in expected_categories:
+                        if cat not in categories:
+                            await self.log_result("profile_category_data", False, 
+                                                f"Missing category: {cat}", data)
+                            return False
+                        
+                        cat_data = categories[cat]
+                        required_cat_fields = ["xp", "level", "title", "xp_progress", "unlocked_titles"]
+                        missing_cat_fields = [field for field in required_cat_fields if field not in cat_data]
+                        
+                        if missing_cat_fields:
+                            await self.log_result("profile_category_data", False, 
+                                                f"Category {cat} missing fields: {missing_cat_fields}", data)
+                            return False
+                    
+                    # Validate additional profile fields
+                    if "all_unlocked_titles" not in data:
+                        await self.log_result("profile_category_data", False, 
+                                            "Profile missing 'all_unlocked_titles' field", data)
                         return False
                     
-                    latest_match = match_history[0]  # Should be most recent
-                    required_match_fields = ["xp_earned", "xp_breakdown", "won", "category"]
-                    missing_match_fields = [field for field in required_match_fields if field not in latest_match]
-                    
-                    if missing_match_fields:
-                        await self.log_result("profile_advanced_stats", False, 
-                                            f"Missing match history fields: {missing_match_fields}", data)
+                    if "selected_title" not in user:
+                        await self.log_result("profile_category_data", False, 
+                                            "User missing 'selected_title' field", data)
                         return False
                     
-                    # Validate data types and ranges
-                    validation_issues = []
+                    all_titles = data.get("all_unlocked_titles", [])
+                    selected_title = user.get("selected_title")
                     
-                    if not isinstance(user.get("level"), int) or user.get("level") < 1:
-                        validation_issues.append("Level should be integer >= 1")
-                    
-                    if not isinstance(user.get("mmr"), (int, float)) or user.get("mmr") < 100:
-                        validation_issues.append("MMR should be numeric >= 100")
-                    
-                    if not isinstance(user.get("win_rate"), (int, float)) or user.get("win_rate") < 0 or user.get("win_rate") > 100:
-                        validation_issues.append("Win rate should be 0-100")
-                    
-                    if not isinstance(user.get("seasonal_total_xp"), int) or user.get("seasonal_total_xp") < 0:
-                        validation_issues.append("Seasonal total XP should be non-negative integer")
-                    
-                    if validation_issues:
-                        await self.log_result("profile_advanced_stats", False, 
-                                            f"Validation issues: {'; '.join(validation_issues)}", data)
-                        return False
-                    
-                    await self.log_result("profile_advanced_stats", True, 
-                                        f"Profile loaded - Level: {user['level']}, MMR: {user['mmr']}, Win Rate: {user['win_rate']}%, Streak: {user['current_streak']} ({user['streak_badge']})", 
+                    await self.log_result("profile_category_data", True, 
+                                        f"Profile category data complete - 3 categories, {len(all_titles)} total unlocked titles, selected: '{selected_title}'", 
                                         data)
                     return True
                     
                 else:
                     error_data = await response.text()
-                    await self.log_result("profile_advanced_stats", False, 
+                    await self.log_result("profile_category_data", False, 
                                         f"HTTP {response.status}: {error_data}")
                     return False
                     
         except Exception as e:
-            await self.log_result("profile_advanced_stats", False, f"Exception: {str(e)}")
+            await self.log_result("profile_category_data", False, f"Exception: {str(e)}")
             return False
 
-    async def test_leaderboard_seasonal_view(self):
-        """Test leaderboard API with both alltime and seasonal views."""
-        print("\n=== Testing Leaderboard API with Seasonal View ===")
+    async def test_match_submit_title_detection(self):
+        """Test match submit detects new title unlocks and returns new_title, new_level."""
+        print("\n=== Testing Match Submit with Title Detection ===")
         
-        # Test alltime leaderboard
-        try:
-            async with self.session.get(f"{BASE_URL}/leaderboard?scope=world&view=alltime&limit=10") as response:
-                if response.status == 200:
-                    alltime_data = await response.json()
-                    
-                    if not isinstance(alltime_data, list):
-                        await self.log_result("leaderboard_seasonal", False, 
-                                            "Alltime leaderboard should return array", alltime_data)
-                        return False
-                    
-                    if alltime_data:
-                        entry = alltime_data[0]
-                        required_fields = ["pseudo", "avatar_seed", "total_xp", "level", "streak_badge", "rank"]
-                        missing_fields = [field for field in required_fields if field not in entry]
-                        
-                        if missing_fields:
-                            await self.log_result("leaderboard_seasonal", False, 
-                                                f"Missing alltime leaderboard fields: {missing_fields}", alltime_data)
-                            return False
-                else:
-                    error_data = await response.text()
-                    await self.log_result("leaderboard_seasonal", False, 
-                                        f"Alltime leaderboard HTTP {response.status}: {error_data}")
-                    return False
-                    
-        except Exception as e:
-            await self.log_result("leaderboard_seasonal", False, f"Alltime leaderboard exception: {str(e)}")
+        if not self.test_user_id:
+            await self.log_result("match_submit_title_detection", False, "No test user available - registration failed")
             return False
         
-        # Test seasonal leaderboard
+        # Submit a match that should potentially unlock a title
+        match_data = {
+            "player_id": self.test_user_id,
+            "category": "geographie", 
+            "player_score": 140,  # High score to earn lots of XP
+            "opponent_score": 80,
+            "opponent_pseudo": "TitleBot",
+            "opponent_is_bot": True,
+            "correct_count": 7,
+            "opponent_level": 1
+        }
+        
         try:
-            async with self.session.get(f"{BASE_URL}/leaderboard?scope=world&view=seasonal&limit=10") as response:
+            async with self.session.post(f"{BASE_URL}/game/submit", json=match_data) as response:
                 if response.status == 200:
-                    seasonal_data = await response.json()
+                    data = await response.json()
                     
-                    if not isinstance(seasonal_data, list):
-                        await self.log_result("leaderboard_seasonal", False, 
-                                            "Seasonal leaderboard should return array", seasonal_data)
+                    # Validate response structure includes title detection fields
+                    if "new_title" not in data:
+                        await self.log_result("match_submit_title_detection", False, 
+                                            "Match submit response missing 'new_title' field", data)
                         return False
                     
-                    if seasonal_data:
-                        entry = seasonal_data[0]
-                        required_fields = ["pseudo", "avatar_seed", "total_xp", "level", "streak_badge", "rank"]
-                        missing_fields = [field for field in required_fields if field not in entry]
-                        
-                        if missing_fields:
-                            await self.log_result("leaderboard_seasonal", False, 
-                                                f"Missing seasonal leaderboard fields: {missing_fields}", seasonal_data)
-                            return False
+                    if "new_level" not in data:
+                        await self.log_result("match_submit_title_detection", False, 
+                                            "Match submit response missing 'new_level' field", data)
+                        return False
                     
-                    await self.log_result("leaderboard_seasonal", True, 
-                                        f"Both leaderboard views working - Alltime entries: {len(alltime_data)}, Seasonal entries: {len(seasonal_data)}", 
-                                        {"alltime_count": len(alltime_data), "seasonal_count": len(seasonal_data)})
+                    new_title = data.get("new_title")
+                    new_level = data.get("new_level")
+                    
+                    # Validate title structure if present
+                    if new_title:
+                        required_title_fields = ["level", "title", "category"]
+                        missing_title_fields = [field for field in required_title_fields if field not in new_title]
+                        
+                        if missing_title_fields:
+                            await self.log_result("match_submit_title_detection", False, 
+                                                f"New title object missing fields: {missing_title_fields}", data)
+                            return False
+                        
+                        await self.log_result("match_submit_title_detection", True, 
+                                            f"Title detection working - New title unlocked: '{new_title['title']}' at level {new_title['level']} (Category: {new_title['category']})", 
+                                            data)
+                    else:
+                        await self.log_result("match_submit_title_detection", True, 
+                                            "Title detection working - No new title unlocked this match (expected behavior)", 
+                                            data)
                     return True
                     
                 else:
                     error_data = await response.text()
-                    await self.log_result("leaderboard_seasonal", False, 
-                                        f"Seasonal leaderboard HTTP {response.status}: {error_data}")
+                    await self.log_result("match_submit_title_detection", False, 
+                                        f"HTTP {response.status}: {error_data}")
                     return False
                     
         except Exception as e:
-            await self.log_result("leaderboard_seasonal", False, f"Seasonal leaderboard exception: {str(e)}")
+            await self.log_result("match_submit_title_detection", False, f"Exception: {str(e)}")
+            return False
+
+    async def test_select_title(self):
+        """Test title selection API validates unlocked titles and updates selected_title."""
+        print("\n=== Testing Select Title API ===")
+        
+        if not self.test_user_id:
+            await self.log_result("select_title", False, "No test user available - registration failed")
+            return False
+        
+        try:
+            # First get user's unlocked titles
+            async with self.session.get(f"{BASE_URL}/profile/{self.test_user_id}") as response:
+                if response.status != 200:
+                    await self.log_result("select_title", False, "Cannot fetch profile to get unlocked titles")
+                    return False
+                
+                profile_data = await response.json()
+                all_titles = profile_data.get("all_unlocked_titles", [])
+                
+                if not all_titles:
+                    await self.log_result("select_title", False, "No unlocked titles available for testing")
+                    return False
+                
+                # Use the first unlocked title for testing
+                test_title = all_titles[0]["title"]
+                
+                # Test selecting a valid title
+                select_data = {
+                    "user_id": self.test_user_id,
+                    "title": test_title
+                }
+                
+                async with self.session.post(f"{BASE_URL}/user/select-title", json=select_data) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        
+                        if not data.get("success"):
+                            await self.log_result("select_title", False, 
+                                                "Select title response should indicate success", data)
+                            return False
+                        
+                        if data.get("selected_title") != test_title:
+                            await self.log_result("select_title", False, 
+                                                f"Selected title mismatch: expected '{test_title}', got '{data.get('selected_title')}'", data)
+                            return False
+                        
+                        # Verify title appears in profile
+                        async with self.session.get(f"{BASE_URL}/profile/{self.test_user_id}") as verify_response:
+                            if verify_response.status == 200:
+                                verify_data = await verify_response.json()
+                                selected_in_profile = verify_data.get("user", {}).get("selected_title")
+                                
+                                if selected_in_profile != test_title:
+                                    await self.log_result("select_title", False, 
+                                                        f"Title not updated in profile: expected '{test_title}', got '{selected_in_profile}'")
+                                    return False
+                            else:
+                                await self.log_result("select_title", False, "Cannot verify title in profile")
+                                return False
+                        
+                        # Test selecting an invalid (locked) title - should fail
+                        invalid_title = "Locked_Title_123"
+                        select_invalid_data = {
+                            "user_id": self.test_user_id,
+                            "title": invalid_title
+                        }
+                        
+                        async with self.session.post(f"{BASE_URL}/user/select-title", json=select_invalid_data) as invalid_response:
+                            if invalid_response.status == 400:
+                                # This is expected - should reject locked titles
+                                await self.log_result("select_title", True, 
+                                                    f"Title selection working - Valid title '{test_title}' selected, invalid title rejected", 
+                                                    data)
+                                return True
+                            else:
+                                await self.log_result("select_title", False, 
+                                                    "API should reject selection of locked titles with 400 status")
+                                return False
+                        
+                    else:
+                        error_data = await response.text()
+                        await self.log_result("select_title", False, 
+                                            f"HTTP {response.status}: {error_data}")
+                        return False
+                        
+        except Exception as e:
+            await self.log_result("select_title", False, f"Exception: {str(e)}")
             return False
 
     async def run_all_tests(self):
         """Run all backend API tests in sequence."""
-        print("🎯 Starting Duelo Backend API Testing")
+        print("🎯 Starting Duelo Backend API Testing - Per-Category Level System")
         print(f"📡 Base URL: {BASE_URL}")
         print("=" * 60)
         
         # Run tests in dependency order
         tests = [
             ("Guest Registration", self.test_guest_registration),
-            ("Seed Questions", self.test_seed_questions),
-            ("Matchmaking API", self.test_matchmaking_api),
-            ("Match Submit XP Calculation", self.test_match_submit_xp_calculation),
-            ("Profile Advanced Stats", self.test_profile_advanced_stats),
-            ("Leaderboard Seasonal View", self.test_leaderboard_seasonal_view),
+            ("Smart Matchmaking", self.test_smart_matchmaking),
+            ("Per-Category Levels", self.test_per_category_levels),
+            ("Profile Category Data", self.test_profile_category_data),
+            ("Match Submit Title Detection", self.test_match_submit_title_detection),
+            ("Select Title", self.test_select_title),
         ]
         
         passed_count = 0

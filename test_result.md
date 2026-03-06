@@ -139,7 +139,10 @@ backend:
     status_history:
         - working: true
           agent: "main"
-          comment: "Returns bot opponent with level, streak, and streak_badge."
+          comment: "Updated: Smart matchmaking - accepts category + player_id, returns bot with similar category level (+/- 5) and category title. Returns both player and opponent data."
+        - working: true
+          agent: "testing"
+          comment: "Tested smart matchmaking with category='series_tv' and player_id. Successfully returns both player and opponent objects with level, title fields. Opponent level correctly matches within +/-5 of player level. Bot opponent includes all required fields: pseudo, avatar_seed, is_bot, level, title, streak, streak_badge."
 
   - task: "Match Submit with XP Calculation"
     implemented: true
@@ -151,10 +154,10 @@ backend:
     status_history:
         - working: true
           agent: "main"
-          comment: "Fixed TOTAL_QUESTIONS bug. Now calculates XP with base, victory, perfection, giant_slayer, and streak bonuses. Updates user MMR, streak, and seasonal XP."
+          comment: "Updated: Now detects new title unlocks. Returns new_title and new_level in response when a title threshold is crossed. XP formula unchanged but level calculation uses new per-category formula: 500 + (N-1)^2 * 10, cap 50."
         - working: true
           agent: "testing"
-          comment: "PASSED - XP calculation working perfectly. Base XP (score*2), Victory bonus (50), Perfection bonus (50 for 7/7 correct), Giant Slayer bonus (100 for beating 15+ level higher opponent), Streak bonus calculated correctly. All XP breakdown fields present and accurate. MMR updates properly. Winner assignment correct."
+          comment: "Tested match submission with title detection. XP calculation working correctly (Base: score*2, Victory: 50, Perfection: 50, Giant Slayer: 100 if opponent 15+ levels higher, Streak bonus). Response correctly includes new_title and new_level fields. Title detection works when crossing level thresholds (1, 10, 20, 35, 50)."
 
   - task: "Profile API with Advanced Stats"
     implemented: true
@@ -166,12 +169,12 @@ backend:
     status_history:
         - working: true
           agent: "main"
-          comment: "Returns user stats including level, title, mmr, streak_badge, seasonal_total_xp, and match history with xp_breakdown."
+          comment: "Updated: Returns per-category levels, titles, XP progress (current/needed/progress), unlocked titles per category, selected_title, and all_unlocked_titles list."
         - working: true
           agent: "testing"
-          comment: "PASSED - Profile API working perfectly. Returns all required fields: level, title, mmr, current_streak, streak_badge, seasonal_total_xp, win_rate. Match history includes xp_earned and xp_breakdown. Data types and ranges validated correctly."
+          comment: "Tested profile API with per-category data. Successfully returns user.categories with all 3 categories (series_tv, geographie, histoire). Each category includes: xp, level, title, xp_progress (current/needed/progress), unlocked_titles. Profile also includes all_unlocked_titles array and selected_title field. Category level calculation follows correct formula: 500 + (N-1)^2 * 10."
 
-  - task: "Leaderboard API with Seasonal View"
+  - task: "Select Title API"
     implemented: true
     working: true
     file: "backend/server.py"
@@ -181,10 +184,25 @@ backend:
     status_history:
         - working: true
           agent: "main"
-          comment: "Returns leaderboard with alltime/seasonal views, includes streak_badge and level."
+          comment: "New endpoint POST /api/user/select-title. Validates title is actually unlocked. Updates user.selected_title."
         - working: true
           agent: "testing"
-          comment: "PASSED - Leaderboard API working perfectly. Both alltime and seasonal views return correct data structure with required fields: pseudo, avatar_seed, total_xp, level, streak_badge, rank. Query parameters scope=world, view=alltime/seasonal, limit=10 all working correctly."
+          comment: "Tested title selection API. POST /api/user/select-title correctly validates that titles are unlocked before allowing selection. Returns 400 error for locked titles. Successfully updates user.selected_title and persists in profile. Validation works by checking against all_unlocked_titles list."
+
+  - task: "Per-Category Level System"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: "New formula: XP needed for level N+1 = 500 + (N-1)^2 * 10. Max level 50. Category titles at levels 1, 10, 20, 35, 50 per category."
+        - working: true
+          agent: "testing"
+          comment: "Tested per-category level system with formula validation. Level calculation correctly implemented: XP needed for N→N+1 = 500 + (N-1)^2 * 10, max level 50. Verified through match submission and profile check. XP progress shows correct current/needed/progress values. Category titles unlock at correct thresholds (1, 10, 20, 35, 50). Each category (series_tv, geographie, histoire) has independent XP/level tracking."
 
   - task: "Seed Questions API"
     implemented: true
@@ -199,7 +217,7 @@ backend:
           comment: "Seeds 30 questions across 3 categories."
 
 frontend:
-  - task: "Profile Screen with Advanced Stats"
+  - task: "Profile Screen with Per-Category Levels"
     implemented: true
     working: true
     file: "frontend/app/(tabs)/profile.tsx"
@@ -209,9 +227,9 @@ frontend:
     status_history:
         - working: true
           agent: "main"
-          comment: "New profile with level card, XP progress bar, streak badge (fire/bolt/glow), MMR display, seasonal XP, category XP bars, and match history with XP earned."
+          comment: "Rewritten: Shows 3 category cards with level, XP progress bar, titles. Title selection via modal. No global level visible. Verified via screenshots."
 
-  - task: "Matchmaking Versus Screen"
+  - task: "Matchmaking with Category Level"
     implemented: true
     working: true
     file: "frontend/app/matchmaking.tsx"
@@ -221,19 +239,19 @@ frontend:
     status_history:
         - working: true
           agent: "main"
-          comment: "New versus screen after search. Shows both players with animations, opponent streak badge, level, and glow effect for 10+ streaks."
+          comment: "Updated: Sends category + player_id. Shows category-specific level and title for both players. Verified via screenshot."
 
-  - task: "Leaderboard with Seasonal/AllTime"
+  - task: "Leaderboard Tab Removed"
     implemented: true
     working: true
-    file: "frontend/app/(tabs)/leaderboard.tsx"
+    file: "frontend/app/(tabs)/_layout.tsx"
     stuck_count: 0
     priority: "high"
     needs_retesting: false
     status_history:
         - working: true
           agent: "main"
-          comment: "Shows All-Time and Seasonal toggle, streak badges, glow text for 10+ streaks."
+          comment: "Leaderboard tab hidden with href:null. Only Jouer + Profil tabs visible. Verified via screenshot."
 
   - task: "Home Screen with Streak Display"
     implemented: true
@@ -245,9 +263,9 @@ frontend:
     status_history:
         - working: true
           agent: "main"
-          comment: "Updated to show current streak badge in header. Fetches user data on load."
+          comment: "No global level displayed. Shows streak badge in header."
 
-  - task: "Results Screen with XP Breakdown"
+  - task: "Results Screen with Title Celebration"
     implemented: true
     working: true
     file: "frontend/app/results.tsx"
@@ -257,12 +275,12 @@ frontend:
     status_history:
         - working: true
           agent: "main"
-          comment: "Shows detailed XP breakdown: base, victory, perfection, giant_slayer, streak bonuses."
+          comment: "Updated: Shows level up badge and new title celebration modal when a title threshold is crossed."
 
 metadata:
   created_by: "main_agent"
   version: "2.0"
-  test_sequence: 2
+  test_sequence: 3
   run_ui: false
 
 test_plan:
@@ -273,6 +291,6 @@ test_plan:
 
 agent_communication:
     - agent: "main"
-      message: "Completed the advanced engagement system frontend. Fixed TOTAL_QUESTIONS bug in backend. Updated profile.tsx with level card, MMR, streak badges, glow effect. Updated matchmaking.tsx with versus screen showing opponent streak. Updated home.tsx with streak display. All screens verified via screenshots. Please test the backend APIs: submit match (XP calculation), profile (advanced stats), and leaderboard (seasonal view)."
+      message: "Major update: Implemented per-category level system. New XP formula: 500 + (N-1)^2 * 10, max level 50. Category titles at levels 1, 10, 20, 35, 50 per category. Smart matchmaking returns bot with similar category level. Match submit detects new title unlocks. Profile returns per-category data. New select-title endpoint. Leaderboard tab removed from frontend. Please test: 1) POST /api/game/matchmaking with body {category, player_id} 2) POST /api/game/submit - check new_title and new_level in response 3) GET /api/profile/{user_id} - check categories data 4) POST /api/user/select-title with body {user_id, title} 5) Level calculation formula correctness."
     - agent: "testing"
-      message: "BACKEND TESTING COMPLETE ✅ - All high-priority APIs tested and working perfectly. Match Submit API: XP calculation accurate with all bonus types (base, victory, perfection, giant slayer, streak). Profile API: returns all advanced stats including level, title, MMR, win rate, streak badges, seasonal XP, match history with XP breakdown. Leaderboard API: both alltime and seasonal views working with all required fields. Matchmaking API: returns proper bot opponent data. All API responses validated for structure and data types. Total tests: 6 passed, 0 failed."
+      message: "✅ Backend testing complete - All 5 priority tasks PASSED. Comprehensive testing performed: 1) Smart matchmaking working correctly with category+player_id, returns both player and opponent with proper level matching (+/-5). 2) Per-category level system validated with XP formula 500+(N-1)^2*10, max level 50. 3) Profile API returns complete category data structure with xp, level, title, xp_progress, unlocked_titles for all 3 categories plus all_unlocked_titles array. 4) Match submit correctly detects title unlocks and returns new_title/new_level. 5) Title selection validates unlocked status and updates selected_title. Full flow test passed: register user → matchmaking → submit match → check profile → select title. All APIs working as specified in review request. Backend is ready for frontend integration."

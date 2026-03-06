@@ -24,8 +24,14 @@ type OpponentData = {
   avatar_seed: string;
   is_bot: boolean;
   level: number;
+  title: string;
   streak: number;
   streak_badge: string;
+};
+
+type PlayerData = {
+  level: number;
+  title: string;
 };
 
 export default function MatchmakingScreen() {
@@ -35,6 +41,7 @@ export default function MatchmakingScreen() {
   const [dots, setDots] = useState('');
   const [phase, setPhase] = useState<'searching' | 'versus'>('searching');
   const [opponent, setOpponent] = useState<OpponentData | null>(null);
+  const [playerInfo, setPlayerInfo] = useState<PlayerData | null>(null);
   const [pseudo, setPseudo] = useState('Joueur');
 
   const radarAnim = useRef(new Animated.Value(0)).current;
@@ -119,9 +126,15 @@ export default function MatchmakingScreen() {
 
   const fetchOpponent = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/game/matchmaking`, { method: 'POST' });
+      const userId = await AsyncStorage.getItem('duelo_user_id');
+      const res = await fetch(`${API_URL}/api/game/matchmaking`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ category, player_id: userId }),
+      });
       const data = await res.json();
       setOpponent(data.opponent);
+      setPlayerInfo(data.player);
       setPhase('versus');
       showVersusScreen(data.opponent);
     } catch {
@@ -174,6 +187,8 @@ export default function MatchmakingScreen() {
   if (phase === 'versus' && opponent) {
     const oppBadge = BADGE_MAP[opponent.streak_badge] || '';
     const oppIsGlow = opponent.streak_badge === 'glow';
+    const pLevel = playerInfo?.level || 1;
+    const pTitle = playerInfo?.title || '';
 
     return (
       <SafeAreaView style={styles.container}>
@@ -187,7 +202,8 @@ export default function MatchmakingScreen() {
                 <Text style={styles.versusAvatarText}>{pseudo[0]?.toUpperCase()}</Text>
               </View>
               <Text style={styles.versusPseudo} numberOfLines={1}>{pseudo}</Text>
-              <Text style={styles.versusLevel}>Challenger</Text>
+              <Text style={styles.versusLevel}>Niv. {pLevel}</Text>
+              {pTitle ? <Text style={styles.versusTitle}>{pTitle}</Text> : null}
             </Animated.View>
 
             {/* VS Badge */}
@@ -210,6 +226,7 @@ export default function MatchmakingScreen() {
                 {oppBadge ? <Text style={styles.versusBadgeEmoji}>{oppBadge}</Text> : null}
               </View>
               <Text style={styles.versusLevel}>Niv. {opponent.level}</Text>
+              <Text style={styles.versusTitle}>{opponent.title}</Text>
               {opponent.streak >= 3 && (
                 <View style={[styles.versusStreakTag, oppIsGlow && styles.versusStreakGlow]}>
                   <Text style={styles.versusStreakText}>
@@ -234,7 +251,6 @@ export default function MatchmakingScreen() {
         <Text style={styles.categoryLabel}>{getCategoryLabel()}</Text>
 
         <View style={styles.radarContainer}>
-          {/* Expanding rings */}
           <Animated.View style={[styles.ring, {
             opacity: ringAnim1.interpolate({ inputRange: [0, 1], outputRange: [0.6, 0] }),
             transform: [{ scale: ringAnim1.interpolate({ inputRange: [0, 1], outputRange: [0.5, 2] }) }],
@@ -244,7 +260,6 @@ export default function MatchmakingScreen() {
             transform: [{ scale: ringAnim2.interpolate({ inputRange: [0, 1], outputRange: [0.5, 2.5] }) }],
           }]} />
 
-          {/* Center radar */}
           <Animated.View style={[styles.radarSweep, { transform: [{ rotate: spin }] }]}>
             <View style={styles.sweepLine} />
           </Animated.View>
@@ -310,6 +325,7 @@ const styles = StyleSheet.create({
   },
   versusBadgeEmoji: { fontSize: 16 },
   versusLevel: { color: '#525252', fontSize: 12, fontWeight: '600', marginTop: 2 },
+  versusTitle: { color: '#8A2BE2', fontSize: 11, fontWeight: '700', marginTop: 3 },
   versusStreakTag: {
     marginTop: 8, backgroundColor: 'rgba(255,100,0,0.12)', borderRadius: 10,
     paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, borderColor: 'rgba(255,100,0,0.25)',

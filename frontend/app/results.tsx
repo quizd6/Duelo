@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, Animated, Share, Dimensions, ActivityIndicator
+  View, Text, TouchableOpacity, StyleSheet, Animated, Share, Modal, ActivityIndicator
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -15,6 +15,10 @@ const CATEGORY_NAMES: Record<string, string> = {
   histoire: 'Histoire de France',
 };
 
+const CATEGORY_ICONS: Record<string, string> = {
+  series_tv: '📺', geographie: '🌍', histoire: '🏛️',
+};
+
 type XpBreakdown = {
   base: number;
   victory: number;
@@ -22,6 +26,12 @@ type XpBreakdown = {
   giant_slayer: number;
   streak: number;
   total: number;
+};
+
+type NewTitle = {
+  level: number;
+  title: string;
+  category: string;
 };
 
 export default function ResultsScreen() {
@@ -39,12 +49,20 @@ export default function ResultsScreen() {
   const draw = pScore === oScore;
 
   const [xpBreakdown, setXpBreakdown] = useState<XpBreakdown | null>(null);
+  const [newTitle, setNewTitle] = useState<NewTitle | null>(null);
+  const [newLevel, setNewLevel] = useState<number | null>(null);
+  const [showTitleModal, setShowTitleModal] = useState(false);
   const [submitting, setSubmitting] = useState(true);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.5)).current;
   const cardSlide = useRef(new Animated.Value(60)).current;
   const xpSlide = useRef(new Animated.Value(40)).current;
+
+  // Title celebration anims
+  const titleScale = useRef(new Animated.Value(0)).current;
+  const titleOpacity = useRef(new Animated.Value(0)).current;
+  const titleGlow = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     submitMatch();
@@ -84,8 +102,35 @@ export default function ResultsScreen() {
       if (data.xp_breakdown) {
         setXpBreakdown(data.xp_breakdown);
       }
+      if (data.new_title) {
+        setNewTitle(data.new_title);
+        // Show title celebration after a short delay
+        setTimeout(() => {
+          setShowTitleModal(true);
+          animateTitleCelebration();
+        }, 1200);
+      }
+      if (data.new_level) {
+        setNewLevel(data.new_level);
+      }
     } catch {}
     setSubmitting(false);
+  };
+
+  const animateTitleCelebration = () => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    Animated.parallel([
+      Animated.spring(titleScale, { toValue: 1, tension: 60, friction: 6, useNativeDriver: true }),
+      Animated.timing(titleOpacity, { toValue: 1, duration: 400, useNativeDriver: true }),
+    ]).start();
+
+    // Glow loop
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(titleGlow, { toValue: 1, duration: 1000, useNativeDriver: true }),
+        Animated.timing(titleGlow, { toValue: 0.4, duration: 1000, useNativeDriver: true }),
+      ])
+    ).start();
   };
 
   const shareResult = async () => {
@@ -112,6 +157,11 @@ export default function ResultsScreen() {
             {won ? 'VICTOIRE !' : draw ? 'ÉGALITÉ !' : 'DÉFAITE'}
           </Text>
           <Text style={styles.correctBadge}>{correctCount}/7 bonnes réponses</Text>
+          {newLevel && (
+            <View style={styles.levelUpBadge}>
+              <Text style={styles.levelUpText}>⬆️ Niveau {newLevel} !</Text>
+            </View>
+          )}
         </Animated.View>
 
         {/* Score Card */}
@@ -195,6 +245,37 @@ export default function ResultsScreen() {
           </TouchableOpacity>
         </Animated.View>
       </View>
+
+      {/* Title Celebration Modal */}
+      {newTitle && (
+        <Modal visible={showTitleModal} transparent animationType="none" onRequestClose={() => setShowTitleModal(false)}>
+          <View style={styles.celebrationOverlay}>
+            <Animated.View style={[styles.celebrationContent, {
+              opacity: titleOpacity,
+              transform: [{ scale: titleScale }],
+            }]}>
+              <Text style={styles.celebrationStar}>🌟</Text>
+              <Text style={styles.celebrationHeader}>NOUVEAU TITRE DÉBLOQUÉ</Text>
+              <Animated.Text style={[styles.celebrationTitle, { opacity: titleGlow }]}>
+                {newTitle.title}
+              </Animated.Text>
+              <View style={styles.celebrationCategory}>
+                <Text style={styles.celebrationCatIcon}>{CATEGORY_ICONS[newTitle.category] || '❓'}</Text>
+                <Text style={styles.celebrationCatText}>
+                  {CATEGORY_NAMES[newTitle.category]} • Niveau {newTitle.level}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.celebrationBtn}
+                onPress={() => setShowTitleModal(false)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.celebrationBtnText}>CONTINUER</Text>
+              </TouchableOpacity>
+            </Animated.View>
+          </View>
+        </Modal>
+      )}
     </SafeAreaView>
   );
 }
@@ -209,6 +290,11 @@ const styles = StyleSheet.create({
   drawText: { color: '#FFD700' },
   lossText: { color: '#FF3B30' },
   correctBadge: { color: '#A3A3A3', fontSize: 14, fontWeight: '600', marginTop: 6 },
+  levelUpBadge: {
+    marginTop: 8, backgroundColor: 'rgba(138,43,226,0.2)', borderRadius: 12,
+    paddingHorizontal: 14, paddingVertical: 4, borderWidth: 1, borderColor: 'rgba(138,43,226,0.3)',
+  },
+  levelUpText: { color: '#8A2BE2', fontSize: 14, fontWeight: '800' },
   scoreCard: {
     backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 20, padding: 20,
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', marginBottom: 16,
@@ -255,4 +341,28 @@ const styles = StyleSheet.create({
   playAgainText: { color: '#FFF', fontSize: 15, fontWeight: '800', letterSpacing: 2 },
   homeButton: { padding: 12, alignItems: 'center' },
   homeText: { color: '#525252', fontSize: 14, fontWeight: '600' },
+  // Celebration Modal
+  celebrationOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32,
+  },
+  celebrationContent: { alignItems: 'center', width: '100%' },
+  celebrationStar: { fontSize: 72, marginBottom: 16 },
+  celebrationHeader: {
+    fontSize: 14, fontWeight: '800', color: '#FFD700', letterSpacing: 4, marginBottom: 12,
+  },
+  celebrationTitle: {
+    fontSize: 32, fontWeight: '900', color: '#FFF', textAlign: 'center', marginBottom: 16,
+    textShadowColor: '#8A2BE2', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 20,
+  },
+  celebrationCategory: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 32,
+    backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8,
+  },
+  celebrationCatIcon: { fontSize: 18 },
+  celebrationCatText: { color: '#A3A3A3', fontSize: 14, fontWeight: '600' },
+  celebrationBtn: {
+    backgroundColor: '#8A2BE2', borderRadius: 16, paddingHorizontal: 48, paddingVertical: 16,
+    shadowColor: '#8A2BE2', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.6, shadowRadius: 16,
+  },
+  celebrationBtnText: { color: '#FFF', fontSize: 16, fontWeight: '900', letterSpacing: 3 },
 });

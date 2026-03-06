@@ -29,15 +29,15 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="leaderboard"
-        options={{
-          tabBarIcon: ({ focused }) => <TabIcon label="Classement" focused={focused} icon="🏆" />,
-        }}
-      />
-      <Tabs.Screen
         name="profile"
         options={{
           tabBarIcon: ({ focused }) => <TabIcon label="Profil" focused={focused} icon="👤" />,
+        }}
+      />
+      <Tabs.Screen
+        name="leaderboard"
+        options={{
+          href: null,
         }}
       />
     </Tabs>

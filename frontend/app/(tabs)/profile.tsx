@@ -1,48 +1,41 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator,
-  Animated, Easing, Dimensions
+  Animated, Easing, Modal, Dimensions
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Haptics from 'expo-haptics';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
-const CATEGORY_ICONS: Record<string, string> = {
-  series_tv: '📺', geographie: '🌍', histoire: '🏛️',
+const CATEGORY_META: Record<string, { icon: string; name: string; color: string }> = {
+  series_tv: { icon: '📺', name: 'Séries TV', color: '#E040FB' },
+  geographie: { icon: '🌍', name: 'Géographie', color: '#00FFFF' },
+  histoire: { icon: '🏛️', name: 'Histoire', color: '#FFD700' },
 };
 
-const XP_LEVELS: Record<number, number> = {
-  1: 0, 2: 100, 3: 250, 4: 450, 5: 700, 6: 1000, 7: 1400, 8: 1900, 9: 2500, 10: 3200,
-  15: 6000, 20: 10000, 30: 20000, 50: 50000, 75: 100000, 100: 200000,
-};
+const BADGE_MAP: Record<string, string> = { fire: '🔥', bolt: '⚡', glow: '✨' };
 
-function getXpForNextLevel(currentLevel: number, totalXp: number): { current: number; needed: number; progress: number } {
-  const sortedLevels = Object.entries(XP_LEVELS).map(([lvl, xp]) => ({ lvl: parseInt(lvl), xp })).sort((a, b) => a.lvl - b.lvl);
-  let currentLevelXp = 0;
-  let nextLevelXp = 100;
-  for (let i = 0; i < sortedLevels.length; i++) {
-    if (sortedLevels[i].lvl === currentLevel) {
-      currentLevelXp = sortedLevels[i].xp;
-      nextLevelXp = sortedLevels[i + 1]?.xp || currentLevelXp + 1000;
-      break;
-    }
-  }
-  const xpInLevel = totalXp - currentLevelXp;
-  const xpNeeded = nextLevelXp - currentLevelXp;
-  return { current: xpInLevel, needed: xpNeeded, progress: Math.min(xpInLevel / xpNeeded, 1) };
-}
+type CategoryData = {
+  xp: number;
+  level: number;
+  title: string;
+  xp_progress: { current: number; needed: number; progress: number };
+  unlocked_titles: { level: number; title: string }[];
+};
 
 type ProfileData = {
   user: {
     id: string; pseudo: string; avatar_seed: string; is_guest: boolean;
-    total_xp: number; xp_series_tv: number; xp_geographie: number; xp_histoire: number;
-    seasonal_total_xp: number;
-    level: number; title: string; matches_played: number; matches_won: number;
+    total_xp: number; selected_title: string | null;
+    categories: Record<string, CategoryData>;
+    matches_played: number; matches_won: number;
     best_streak: number; current_streak: number; streak_badge: string;
     win_rate: number; mmr: number;
   };
+  all_unlocked_titles: { level: number; title: string; category: string }[];
   match_history: Array<{
     id: string; category: string; player_score: number; opponent_score: number;
     opponent: string; won: boolean; xp_earned: number;
@@ -50,35 +43,6 @@ type ProfileData = {
     correct_count: number; created_at: string;
   }>;
 };
-
-const BADGE_MAP: Record<string, string> = { fire: '🔥', bolt: '⚡', glow: '✨' };
-
-function GlowUsername({ pseudo, isGlow }: { pseudo: string; isGlow: boolean }) {
-  const glowAnim = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    if (isGlow) {
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(glowAnim, { toValue: 1, duration: 1500, easing: Easing.inOut(Easing.ease), useNativeDriver: false }),
-          Animated.timing(glowAnim, { toValue: 0, duration: 1500, easing: Easing.inOut(Easing.ease), useNativeDriver: false }),
-        ])
-      ).start();
-    }
-  }, [isGlow]);
-
-  if (!isGlow) {
-    return <Text style={styles.pseudoText}>{pseudo}</Text>;
-  }
-
-  const textShadowRadius = glowAnim.interpolate({ inputRange: [0, 1], outputRange: [4, 16] });
-
-  return (
-    <Animated.Text style={[styles.pseudoText, styles.glowPseudo, { textShadowRadius }]}>
-      {pseudo}
-    </Animated.Text>
-  );
-}
 
 function StreakBadge({ streak, badge }: { streak: number; badge: string }) {
   if (streak < 3) return null;
@@ -103,6 +67,8 @@ export default function ProfileScreen() {
   const router = useRouter();
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showTitleModal, setShowTitleModal] = useState(false);
+  const [savingTitle, setSavingTitle] = useState(false);
 
   useEffect(() => {
     loadProfile();
@@ -120,6 +86,27 @@ export default function ProfileScreen() {
       setProfile(data);
     } catch {}
     setLoading(false);
+  };
+
+  const handleSelectTitle = async (title: string) => {
+    if (!profile) return;
+    setSavingTitle(true);
+    try {
+      const res = await fetch(`${API_URL}/api/user/select-title`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: profile.user.id, title }),
+      });
+      if (res.ok) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setProfile(prev => prev ? {
+          ...prev,
+          user: { ...prev.user, selected_title: title }
+        } : null);
+      }
+    } catch {}
+    setSavingTitle(false);
+    setShowTitleModal(false);
   };
 
   const handleLogout = async () => {
@@ -144,10 +131,9 @@ export default function ProfileScreen() {
     );
   }
 
-  const { user, match_history } = profile;
+  const { user, all_unlocked_titles, match_history } = profile;
   const isGlow = user.streak_badge === 'glow';
-  const xpProgress = getXpForNextLevel(user.level, user.total_xp);
-  const maxCatXp = Math.max(user.xp_series_tv, user.xp_geographie, user.xp_histoire, 100);
+  const displayTitle = user.selected_title || all_unlocked_titles[0]?.title || '';
 
   return (
     <SafeAreaView style={styles.container}>
@@ -157,29 +143,18 @@ export default function ProfileScreen() {
           <View style={[styles.avatarLarge, isGlow && styles.avatarGlow]}>
             <Text style={styles.avatarLargeText}>{user.pseudo[0]?.toUpperCase()}</Text>
           </View>
-          <GlowUsername pseudo={user.pseudo} isGlow={isGlow} />
-          <View style={styles.titleBadge}>
-            <Text style={styles.titleText}>{user.title}</Text>
-          </View>
+          <Text style={styles.pseudoText}>{user.pseudo}</Text>
+          {displayTitle ? (
+            <TouchableOpacity style={styles.titleBadge} onPress={() => setShowTitleModal(true)}>
+              <Text style={styles.titleText}>{displayTitle}</Text>
+              <Text style={styles.titleEdit}> ✎</Text>
+            </TouchableOpacity>
+          ) : null}
           {user.current_streak >= 3 && (
             <View style={styles.headerBadgeRow}>
               <Text style={styles.headerBadgeEmoji}>{BADGE_MAP[user.streak_badge] || ''}</Text>
             </View>
           )}
-        </View>
-
-        {/* Level & XP Progress */}
-        <View style={styles.levelCard}>
-          <View style={styles.levelHeader}>
-            <Text style={styles.levelLabel}>NIVEAU {user.level}</Text>
-            <Text style={styles.levelXp}>{user.total_xp.toLocaleString()} XP</Text>
-          </View>
-          <View style={styles.xpBar}>
-            <View style={[styles.xpFill, { width: `${xpProgress.progress * 100}%` }]} />
-          </View>
-          <Text style={styles.xpProgressText}>
-            {xpProgress.current.toLocaleString()} / {xpProgress.needed.toLocaleString()} XP vers le niveau suivant
-          </Text>
         </View>
 
         {/* Win Streak Banner */}
@@ -205,40 +180,59 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {/* MMR Card */}
-        <View style={styles.mmrCard}>
-          <View style={styles.mmrLeft}>
-            <Text style={styles.mmrIcon}>🎯</Text>
-            <View>
-              <Text style={styles.mmrLabel}>MMR (Classement caché)</Text>
-              <Text style={styles.mmrValue}>{user.mmr}</Text>
-            </View>
-          </View>
-          <View style={styles.mmrRight}>
-            <Text style={styles.seasonalLabel}>XP Saison</Text>
-            <Text style={styles.seasonalValue}>{(user.seasonal_total_xp || 0).toLocaleString()}</Text>
-          </View>
+        {/* Category Levels */}
+        <Text style={styles.sectionTitle}>PROGRESSION PAR CATÉGORIE</Text>
+        <View style={styles.categoryCardsContainer}>
+          {Object.entries(user.categories).map(([catKey, catData]) => {
+            const meta = CATEGORY_META[catKey] || { icon: '❓', name: catKey, color: '#8A2BE2' };
+            return (
+              <View key={catKey} style={[styles.categoryCard, { borderColor: meta.color + '30' }]}>
+                <View style={styles.catCardHeader}>
+                  <View style={[styles.catIconBox, { backgroundColor: meta.color + '20' }]}>
+                    <Text style={styles.catIcon}>{meta.icon}</Text>
+                  </View>
+                  <View style={styles.catHeaderInfo}>
+                    <Text style={styles.catName}>{meta.name}</Text>
+                    <Text style={[styles.catTitle, { color: meta.color }]}>{catData.title}</Text>
+                  </View>
+                  <View style={styles.catLevelBadge}>
+                    <Text style={[styles.catLevelText, { color: meta.color }]}>Niv. {catData.level}</Text>
+                  </View>
+                </View>
+                <View style={styles.catXpBar}>
+                  <View style={[styles.catXpFill, { width: `${catData.xp_progress.progress * 100}%`, backgroundColor: meta.color }]} />
+                </View>
+                <Text style={styles.catXpText}>
+                  {catData.xp_progress.current.toLocaleString()} / {catData.xp_progress.needed.toLocaleString()} XP
+                </Text>
+                {catData.level >= 50 && (
+                  <View style={[styles.maxLevelTag, { backgroundColor: meta.color + '20' }]}>
+                    <Text style={[styles.maxLevelText, { color: meta.color }]}>NIVEAU MAX !</Text>
+                  </View>
+                )}
+              </View>
+            );
+          })}
         </View>
 
-        {/* Category XP */}
-        <Text style={styles.sectionTitle}>XP PAR CATÉGORIE</Text>
-        <View style={styles.categoryXpContainer}>
-          {[
-            { key: 'series_tv', label: 'Séries TV', xp: user.xp_series_tv, color: '#E040FB' },
-            { key: 'geographie', label: 'Géographie', xp: user.xp_geographie, color: '#00FFFF' },
-            { key: 'histoire', label: 'Histoire', xp: user.xp_histoire, color: '#FFD700' },
-          ].map((cat) => (
-            <View key={cat.key} style={styles.catXpRow}>
-              <Text style={styles.catXpIcon}>{CATEGORY_ICONS[cat.key]}</Text>
-              <View style={styles.catXpInfo}>
-                <Text style={styles.catXpLabel}>{cat.label}</Text>
-                <View style={styles.catXpBar}>
-                  <View style={[styles.catXpFill, { width: `${Math.min((cat.xp / maxCatXp) * 100, 100)}%`, backgroundColor: cat.color }]} />
-                </View>
-              </View>
-              <Text style={[styles.catXpValue, { color: cat.color }]}>{cat.xp.toLocaleString()}</Text>
-            </View>
-          ))}
+        {/* Unlocked Titles */}
+        <Text style={styles.sectionTitle}>MES TITRES</Text>
+        <View style={styles.titlesContainer}>
+          {all_unlocked_titles.map((t, i) => {
+            const meta = CATEGORY_META[t.category] || { icon: '❓', name: '', color: '#8A2BE2' };
+            const isSelected = user.selected_title === t.title;
+            return (
+              <TouchableOpacity
+                key={`${t.category}-${t.level}`}
+                style={[styles.titleChip, isSelected && { borderColor: meta.color, backgroundColor: meta.color + '15' }]}
+                onPress={() => handleSelectTitle(t.title)}
+              >
+                <Text style={styles.titleChipIcon}>{meta.icon}</Text>
+                <Text style={[styles.titleChipText, isSelected && { color: meta.color }]}>{t.title}</Text>
+                {isSelected && <Text style={styles.titleChipCheck}>✓</Text>}
+              </TouchableOpacity>
+            );
+          })}
         </View>
 
         {/* Match History */}
@@ -249,7 +243,7 @@ export default function ProfileScreen() {
           match_history.map((m) => (
             <View key={m.id} style={[styles.matchCard, m.won && styles.matchCardWon]}>
               <View style={styles.matchLeft}>
-                <Text style={styles.matchCategory}>{CATEGORY_ICONS[m.category] || '❓'}</Text>
+                <Text style={styles.matchCategory}>{CATEGORY_META[m.category]?.icon || '❓'}</Text>
                 <View>
                   <Text style={styles.matchOpponent}>vs {m.opponent}</Text>
                   <Text style={styles.matchDate}>{new Date(m.created_at).toLocaleDateString('fr-FR')}</Text>
@@ -277,6 +271,40 @@ export default function ProfileScreen() {
           <Text style={styles.logoutText}>Se déconnecter</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {/* Title Selection Modal */}
+      <Modal visible={showTitleModal} transparent animationType="fade" onRequestClose={() => setShowTitleModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Choisir un titre</Text>
+            <Text style={styles.modalHint}>Ce titre sera affiché sous ton pseudo en duel</Text>
+            <ScrollView style={styles.modalScroll}>
+              {all_unlocked_titles.map((t) => {
+                const meta = CATEGORY_META[t.category] || { icon: '❓', name: '', color: '#8A2BE2' };
+                const isSelected = user.selected_title === t.title;
+                return (
+                  <TouchableOpacity
+                    key={`${t.category}-${t.level}`}
+                    style={[styles.modalItem, isSelected && { borderColor: meta.color, backgroundColor: meta.color + '10' }]}
+                    onPress={() => handleSelectTitle(t.title)}
+                    disabled={savingTitle}
+                  >
+                    <Text style={styles.modalItemIcon}>{meta.icon}</Text>
+                    <View style={styles.modalItemInfo}>
+                      <Text style={[styles.modalItemTitle, isSelected && { color: meta.color }]}>{t.title}</Text>
+                      <Text style={styles.modalItemSub}>{meta.name} • Niv. {t.level}</Text>
+                    </View>
+                    {isSelected && <Text style={[styles.modalItemCheck, { color: meta.color }]}>✓</Text>}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+            <TouchableOpacity style={styles.modalClose} onPress={() => setShowTitleModal(false)}>
+              <Text style={styles.modalCloseText}>Fermer</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -303,30 +331,15 @@ const styles = StyleSheet.create({
   },
   avatarLargeText: { color: '#FFF', fontSize: 38, fontWeight: '900' },
   pseudoText: { fontSize: 26, fontWeight: '800', color: '#FFF' },
-  glowPseudo: {
-    color: '#00FFFF',
-    textShadowColor: '#00FFFF',
-    textShadowOffset: { width: 0, height: 0 },
-  },
   titleBadge: {
+    flexDirection: 'row', alignItems: 'center',
     marginTop: 8, backgroundColor: 'rgba(138,43,226,0.2)', borderRadius: 12,
     paddingHorizontal: 14, paddingVertical: 4, borderWidth: 1, borderColor: 'rgba(138,43,226,0.3)',
   },
   titleText: { color: '#8A2BE2', fontSize: 13, fontWeight: '700' },
+  titleEdit: { color: '#525252', fontSize: 12 },
   headerBadgeRow: { marginTop: 6 },
   headerBadgeEmoji: { fontSize: 20 },
-
-  // Level Card
-  levelCard: {
-    backgroundColor: 'rgba(138,43,226,0.08)', borderRadius: 16, padding: 16,
-    borderWidth: 1, borderColor: 'rgba(138,43,226,0.15)', marginBottom: 16,
-  },
-  levelHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
-  levelLabel: { color: '#8A2BE2', fontSize: 14, fontWeight: '800', letterSpacing: 2 },
-  levelXp: { color: '#00FFFF', fontSize: 14, fontWeight: '700' },
-  xpBar: { height: 8, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 4, overflow: 'hidden' },
-  xpFill: { height: 8, backgroundColor: '#8A2BE2', borderRadius: 4 },
-  xpProgressText: { color: '#525252', fontSize: 11, marginTop: 8, fontWeight: '500' },
 
   // Streak Banner
   streakContainer: {
@@ -346,34 +359,40 @@ const styles = StyleSheet.create({
   statValue: { fontSize: 22, fontWeight: '800', color: '#FFF' },
   statLabel: { fontSize: 10, color: '#525252', marginTop: 4, fontWeight: '600', textTransform: 'uppercase' },
 
-  // MMR Card
-  mmrCard: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 14, padding: 16,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', marginBottom: 24,
-  },
-  mmrLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  mmrIcon: { fontSize: 24 },
-  mmrLabel: { color: '#525252', fontSize: 10, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 1 },
-  mmrValue: { color: '#FFF', fontSize: 22, fontWeight: '800', marginTop: 2 },
-  mmrRight: { alignItems: 'flex-end' },
-  seasonalLabel: { color: '#525252', fontSize: 10, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 1 },
-  seasonalValue: { color: '#00FFFF', fontSize: 18, fontWeight: '800', marginTop: 2 },
-
-  // Category XP
+  // Category Level Cards
   sectionTitle: { fontSize: 12, fontWeight: '800', color: '#525252', letterSpacing: 3, marginBottom: 12, marginTop: 8 },
-  categoryXpContainer: { gap: 12, marginBottom: 24 },
-  catXpRow: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 12, padding: 14,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
+  categoryCardsContainer: { gap: 12, marginBottom: 24 },
+  categoryCard: {
+    backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 16, padding: 16,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
   },
-  catXpIcon: { fontSize: 24, marginRight: 12 },
-  catXpInfo: { flex: 1 },
-  catXpLabel: { color: '#FFF', fontSize: 14, fontWeight: '600', marginBottom: 6 },
-  catXpBar: { height: 4, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 2 },
-  catXpFill: { height: 4, borderRadius: 2 },
-  catXpValue: { fontSize: 16, fontWeight: '800', marginLeft: 12 },
+  catCardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+  catIconBox: { width: 44, height: 44, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  catIcon: { fontSize: 22 },
+  catHeaderInfo: { flex: 1 },
+  catName: { fontSize: 16, fontWeight: '700', color: '#FFF' },
+  catTitle: { fontSize: 12, fontWeight: '600', marginTop: 2 },
+  catLevelBadge: {
+    backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 10,
+    paddingHorizontal: 10, paddingVertical: 4,
+  },
+  catLevelText: { fontSize: 13, fontWeight: '800' },
+  catXpBar: { height: 6, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 3, overflow: 'hidden' },
+  catXpFill: { height: 6, borderRadius: 3 },
+  catXpText: { color: '#525252', fontSize: 11, marginTop: 6, fontWeight: '500' },
+  maxLevelTag: { marginTop: 8, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4, alignSelf: 'flex-start' },
+  maxLevelText: { fontSize: 11, fontWeight: '800', letterSpacing: 1 },
+
+  // Titles
+  titlesContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 24 },
+  titleChip: {
+    flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8,
+    borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', gap: 6,
+  },
+  titleChipIcon: { fontSize: 14 },
+  titleChipText: { color: '#A3A3A3', fontSize: 13, fontWeight: '600' },
+  titleChipCheck: { color: '#00FF9D', fontSize: 14, fontWeight: '800' },
 
   // Match History
   noHistory: { color: '#525252', fontSize: 14, textAlign: 'center', paddingVertical: 20 },
@@ -403,4 +422,31 @@ const styles = StyleSheet.create({
     borderRadius: 12, padding: 14, alignItems: 'center',
   },
   logoutText: { color: '#FF3B30', fontSize: 14, fontWeight: '600' },
+
+  // Modal
+  modalOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', paddingHorizontal: 24,
+  },
+  modalContent: {
+    backgroundColor: '#1A1A1A', borderRadius: 20, padding: 24, maxHeight: '70%',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
+  },
+  modalTitle: { fontSize: 22, fontWeight: '800', color: '#FFF', marginBottom: 4 },
+  modalHint: { fontSize: 13, color: '#525252', marginBottom: 20 },
+  modalScroll: { maxHeight: 300 },
+  modalItem: {
+    flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 12,
+    marginBottom: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(255,255,255,0.04)',
+  },
+  modalItemIcon: { fontSize: 22, marginRight: 12 },
+  modalItemInfo: { flex: 1 },
+  modalItemTitle: { color: '#FFF', fontSize: 16, fontWeight: '700' },
+  modalItemSub: { color: '#525252', fontSize: 11, marginTop: 2 },
+  modalItemCheck: { fontSize: 18, fontWeight: '800' },
+  modalClose: {
+    marginTop: 16, padding: 14, borderRadius: 12, alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+  },
+  modalCloseText: { color: '#A3A3A3', fontSize: 14, fontWeight: '600' },
 });

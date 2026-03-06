@@ -50,6 +50,9 @@ class User(Base):
     # MMR (hidden matchmaking rating)
     mmr = Column(Float, default=1000.0)
 
+    # Selected title for display in duels
+    selected_title = Column(String(100), nullable=True)
+
     created_at = Column(DateTime(timezone=True), default=utc_now)
 
 
