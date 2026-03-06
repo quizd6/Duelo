@@ -1,182 +1,175 @@
 <analysis>
-<original_problem_statement>
-Project Name: Duelo
-Stack: Full-stack React Native + Supabase
 
-1.  **Vision &amp; Design:** Create a competitive multiplayer quiz app named Duelo. The aesthetic should be 'Dark Mode Premium', inspired by QuizUp (2014). Dominant colors: Deep Black, Electric Violet (#8A2BE2), and Cyan (#00FFFF). Animations should be ultra-smooth (60fps) with transitions under 400ms. Add Glassmorphism effects to game cards.
-2.  **Authentication**: Implement a hybrid system:
-    *   A 'Guest' mode with a mandatory unique username.
-    *   Progression saving via Sign in with Apple, Google Social Login, and Email/Password. A guest must be able to link their account later.
-3.  **Game Loop:**
-    *   **Matchmaking:** A radar animation screen to find an opponent. After 5 seconds, automatically connect to a 'Bot'. Use a hidden MMR score for balanced matchmaking. Display player win streaks on the versus screen.
-    *   **The Duel:** 7 questions per match. A central 10-second circular timer.
-    *   **Scoring:** Speed-based, from 20 points (instant) down to 10 points. 0 for wrong answers.
-    *   **Feedback:** Haptic vibration and immediate Green/Red color feedback on answer selection.
-4.  **Engagement &amp; Virality:**
-    *   **XP System:**
-        *   Base XP: .
-        *   Bonuses:  for a win,  for a perfect 7/7,  for beating an opponent 15+ levels higher ('Giant Slayer').
-    *   **Win Streaks:**
-        *   3 wins:  XP/match + 🔥 badge.
-        *   5 wins:  XP/match + ⚡ badge.
-        *   10+ wins:  XP/match + Glow effect on the username.
-    *   **Leaderboards:**
-        *   Based on cumulative XP per category.
-        *   Two views: 'All-Time' and 'Seasonal' (resets monthly).
-    *   **Geolocation:** Use IP to detect the user's City, Region, and Country.
-    *   **Sharing:** At the end of a match, display a visual score card with a 'Challenge a friend' button that generates a deep link.
-5.  **Initial Categories**: 'Séries TV Cultes', 'Géographie Mondiale', 'Histoire de France'.
-6.  **Admin Interface:** Create a password-protected route  (as a separate desktop web page, not in the mobile app) for bulk importing questions from raw JSON.
-7.  **Database Architecture (Supabase):** , , and  tables.
-</original_problem_statement>
+**original_problem_statement:**
+The user initially presented a mobile quiz app called Duelo.
+The user then requested a series of significant changes:
+1.  **UI Bug Fix:** On the matchmaking VS screen, a player's streak badge would misalign the player avatars and names. This needed to be fixed so that both players' details are always aligned horizontally at the top.
+2.  **Core Logic Overhaul:**
+    *   Remove the global leaderboard and global player level. All progression must become category-specific.
+    *   Implement a new XP formula for category levels: , with a cap at level 50.
+    *   Introduce Mastery Titles unlocked at levels 1, 10, 20, 35, and 50 within each category. Users should be able to select which title to display. A celebration modal should appear when a new title is unlocked.
+    *   Implement Intelligent Matchmaking that pairs players with opponents of a similar category level (+/- 5 levels), creating a bot if no human is found within 5 seconds.
+3.  **New Social Feature:**
+    *   Based on a provided image, create a new, detailed category page.
+    *   This page should include:
+        *   Header with category info.
+        *   Buttons to Play, Follow, and view a category-specific Leaderboard.
+        *   Stats: a progress bar for completed questions, user's level in the category, follower count, and total question count.
+        *   A community wall where users can create posts (text, image, video), and other users can comment and like.
 
-**User's preferred language**: French
+**User's preferred language**: French. The next agent MUST respond in French.
 
 **what currently exists?**
-A full-stack application for the Duelo quiz game has been developed. It uses a React Native (Expo) frontend, a FastAPI backend, and a Supabase (PostgreSQL) database.
+The application is a full-stack quiz game. The initial version has been heavily modified. The global level and leaderboard system has been successfully replaced with a per-category progression system, including levels, XP, and unlockable titles. The matchmaking logic has been updated accordingly.
 
-Core functionalities are in place:
-- **Backend:** Fully set up with Alembic for database migrations. Endpoints exist for guest authentication, matchmaking (with bot fallback), serving questions, and submitting match results. The logic for an advanced engagement system (XP, win streaks, MMR, seasonal leaderboards) is complete.
-- **Frontend:** A multi-screen mobile app built with Expo Router. It includes a home screen, matchmaking, a QuizUp-style game screen, and a results screen. Tab-based navigation is set up for Home, Leaderboard, and Profile.
-- **Admin:** A separate, web-based admin dashboard is available at  for bulk-importing questions.
-
-The initial game loop has been implemented and tested.
+A new major feature, a detailed category page with a social wall (posts, likes, comments, followers), has just been implemented on both the backend (new DB tables and APIs) and frontend (new screen at ). The home screen now navigates to these new pages.
 
 **Last working item**:
-- Last item agent was working: The agent was implementing the frontend for the new, advanced engagement system. The backend logic is already complete. The agent had finished updating the , , , and  files to handle new data like win streaks, seasonal XP, and detailed XP bonuses. The next step was to update the Profile screen and add visual indicators for win streaks.
+- Last item agent was working: The agent just completed the initial implementation of the Category Detail Page with a full social wall feature. This involved creating new database tables (, , , ), building corresponding FastAPI endpoints, creating a new dynamic route and screen in the frontend (), and connecting the home screen to navigate to it.
 - Status: IN PROGRESS
 - Agent Testing Done: N
 - Which testing method agent to use? both
+  - **Backend:** Use  to validate all new social endpoints (, , , , etc.).
+  - **Frontend:** Use  to test the full user flow on the new category page: navigating to it, following the category, creating a post with and without an image, liking a post, and adding a comment.
 - User Testing Done: N
 
 **All Pending/In progress Issue list**:
-  - Issue 1: (P0) Complete the frontend for the new engagement system.
+-   **Issue 1: Full verification of the Social Wall feature (P0)**
 
-  Issues Detail:
-  - Issue 1: 
-     - Attempted fixes: The agent has correctly identified the files needing changes and has updated , , , and .
-     - Next debug checklist: 
-        1.  Update  to display new user stats: , , and  (with its corresponding 🔥/⚡ badge).
-        2.  Update  to visually display the opponent's win streak and badge.
-        3.  Implement the Glow effect for usernames with a 10+ win streak, as specified in the PRD.
-        4.  Perform a full end-to-end test of the feature: register, play matches, verify the new results screen, check the updated leaderboards (seasonal/all-time), and confirm the profile screen shows the correct stats.
-     - Why fix this issue and what will be achieved with the fix? This will complete a major feature request from the user, adding significant depth and replayability to the application through advanced progression and competitive systems.
-     - Status:  IN PROGRESS
-     - Is recurring issue? N
-     - Should Test frontend/backend/both after fix? both
-     - Blocked on other issue: None
+**Issues Detail**:
+-   **Issue 1: Full verification of the Social Wall feature**
+    -   **Attempted fixes:** The feature has been built, and initial visual verification via screenshots confirms the UI layout is correct. However, the interactive elements (posting, liking, following, commenting) have not been tested.
+    -   **Next debug checklist:**
+        1.  **Backend:** Run  to ensure all new social APIs in  are robust and function as expected (create post, like, comment, follow, etc.).
+        2.  **Frontend:** Use  to simulate user interactions on :
+            *   Click the Suivre (Follow) button and verify the backend call.
+            *   Click the + Publier (Publish) button, open the post creation modal.
+            *   Create a text-only post and verify it appears on the wall.
+            *   Create a post with an image (this will test  integration) and verify it appears correctly.
+            *   Click the like and comment buttons on a post and verify functionality.
+    -   **Why fix this issue and what will be achieved with the fix?** This is a major new feature requested by the user. Thorough testing is required to confirm it is fully functional and bug-free before presenting it as complete.
+    -   **Status:** IN PROGRESS
+    -   **Is recurring issue?** N
+    -   **Should Test frontend/backend/both after fix?** Both.
+    -   **Blocked on other issue:** None.
 
 **In progress Task List**:
-  - Task 1: (P0) Complete Frontend for Advanced Engagement System.
-     - Where to resume: The agent needs to start by modifying  to display the new player statistics (level, MMR, win streak). Following that, visual elements for win streaks (badges, glow effect) need to be added to the matchmaking and profile screens.
-     - What will be achieved with this? This will make the new backend features visible and usable for the player, completing the user's request for a more engaging progression system.
-     - Status:  IN PROGRESS
-     - Should Test frontend/backend/both after fix? both
-     - Blocked on something: None
+-   **Task 1: Complete and test the Category Detail Page and Social Wall (P0)**
+
+**Task Detail**:
+-   **Task 1: Complete and test the Category Detail Page and Social Wall**
+    -   **Where to resume:** The code is implemented. The next step is to initiate backend testing, followed by frontend testing, as outlined in the Pending/In progress Issue list above.
+    -   **What will be achieved with this?** A fully functional and tested social hub for each quiz category, meeting the user's latest request.
+    -   **Status:** IN PROGRESS
+    -   **Should Test frontend/backend/both after fix?** Both
+    -   **Blocked on something:** No.
 
 **Upcoming and Future Tasks**
 - **Upcoming Tasks:**
-  - (P1) Implement Sign in with Apple, Google Social Login, and standard Email/Password authentication.
+  - **Category Leaderboard (P1):** The user's design for the category detail page included a Classement (Leaderboard) button. The backend logic for a global leaderboard was removed, but a new endpoint and UI will be needed to display a leaderboard specific to each category.
+    - Files to modify:  (new endpoint),  (connect button to a new screen).
 - **Future Tasks:**
-  - (P2) Implement the Challenge a friend button on the results screen to generate a deep link.
-  - (P2) Implement the logic to archive the top 3 players of a season when it resets.
+  - **Video Posts:** The user mentioned posts could contain texte, image, vidéo. The current implementation only handles text and images. Video support would be a future enhancement.
 
 **Completed work in this session**
-- **Backend & Database:**
-  - Full project setup with FastAPI and Supabase (PostgreSQL).
-  - Database schema created and managed with Alembic migrations.
-  - Implemented all backend logic for the initial game loop and the new advanced engagement system (XP, MMR, streaks, seasonal leaderboards).
-- **Frontend:**
-  - Full application structure created with Expo Router.
-  - Guest authentication flow implemented.
-  - Core game screens created (, , , ).
-  - Tab navigation for Home, Leaderboard, and Profile set up.
-  - **Game Screen Redesign:** The  screen was completely rewritten to match the user's QuizUp-style visual reference, including animated score bars and player choice indicators.
-  - **Engagement System UI (Partial):** Updated  for XP breakdown and  for seasonal/all-time views.
-- **Admin Panel:**
-  - Created a separate, desktop-only web admin dashboard.
-- **Bug Fixes:**
-  - Fixed a Connection Error by correctly handling duplicate usernames.
-  - Fixed multiple UI bugs on the game screen related to animations and element positioning.
+- List of all completed tasks with file and method name:
+  - **Matchmaking Alignment Fix:** Corrected a flexbox alignment issue in  by changing  to .
+  - **Core Logic Overhaul (Backend):**
+    - Added  column to  table.
+    - Reworked XP calculation, level-up logic, and title unlocking in  endpoint in .
+    - Implemented intelligent, category-based matchmaking in  in .
+    - Created  endpoint in .
+  - **Core Logic Overhaul (Frontend):**
+    - Removed 'Leaderboard' tab from .
+    - Completely redesigned the profile screen  to show per-category stats.
+    - Updated matchmaking screen  to show category-specific data.
+    - Added a title-unlock celebration modal to .
+  - **Social Wall Feature (Initial Implementation):**
+    - Created new social-related tables (, , , ) in .
+    - Added a suite of new social APIs to .
+    - Created the new category detail screen .
+    - Updated  to navigate to the new detail screen and removed the old LANCER UN DUEL button.
+    - Added  permissions to .
 
 **Earlier issues found/mentioned but not fixed**
-   - None.
+- None. The agent has been diligent in addressing all issues raised by the user so far.
 
 **Known issue recurrence from previous fork**
-  - None.
+- None.
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
-- **Backend:** FastAPI, PostgreSQL (via Supabase), SQLAlchemy ORM, Alembic for database migrations.
-- **Frontend:** React Native, Expo, Expo Router for file-based navigation,  and  for UI animations.
-- **Architecture:** Full-stack monorepo with a clear separation between the backend and frontend.
+-   **Frontend:** Expo, React Native, Expo Router (File-based routing, including dynamic routes), .
+-   **Backend:** FastAPI, Pydantic for data validation.
+-   **Database:** PostgreSQL (managed in ).
+-   **Architecture:** Full-stack monorepo with a clear separation between frontend and backend. State management appears to be handled via component state and API refetching.
 
 **key DB schema**
-- **users:** uid=0(root) gid=0(root) groups=0(root), , , , , , , , , , , , , , , .
-- **questions:** uid=0(root) gid=0(root) groups=0(root), ,  (UNIQUE), , , .
-- **matches:** uid=0(root) gid=0(root) groups=0(root), , , , , , .
-- **match_answers:** uid=0(root) gid=0(root) groups=0(root), , , , , .
+-   : { user_id, username, ...,  }
+-   : { user_id, category_id, xp, level }
+-   : { follower_id, category_id }
+-   : { post_id, author_id, category_id, content, image_base64, created_at }
+-   : { comment_id, post_id, author_id, content, created_at }
+-   : { user_id, post_id, comment_id } (polymorphic-like, one of post/comment will be non-null)
+
+**changes in tech stack**
+-   None.
 
 **All files of reference**
-- : The main FastAPI application containing all API logic.
-- : Defines the SQLAlchemy database models.
-- : Contains the database migration scripts.
-- : The core game screen with complex UI and animations.
-- : The post-game screen, updated for the new XP breakdown.
-- : The leaderboard screen, updated for seasonal/all-time views.
-- : The next file to be modified.
-- : The Product Requirements Document.
-
-**key api endpoints**
-- : Creates a new guest user.
-- : Finds an opponent or starts a game with a bot.
-- : Fetches questions for a category.
-- : Submits match results and calculates progression.
-- : Retrieves leaderboard data.
-- : Gets the current user's profile data.
-- : Serves the admin panel.
-- : Imports questions from the admin panel.
+-   : Contains all backend logic, API endpoints, and database schema management. Heavily modified.
+-   : **New file.** The core of the new social feature.
+-   : Modified to remove the global play button and add navigation to the new category detail pages.
+-   : Completely rewritten to display per-category progress.
+-   : Modified to remove the global leaderboard tab.
+-   : Modified to add iOS permissions for .
+-   : Modified for a UI bug fix and to display new category-specific data.
+-   : Modified to add a celebration modal for new titles.
 
 **Critical Info for New Agent**
-- The project uses **Supabase (PostgreSQL)**, not MongoDB. Schema changes must use Alembic migrations.
-- The current task is a large, in-progress feature. The backend is complete, but the frontend requires further updates and the entire flow needs comprehensive testing.
-- The user is very specific about UI/UX. Pay close attention to visual details and animations.
-- The previous agent was about to present a plan to the user. Your first action should be to create a plan based on this summary and confirm it with the user using the  tool.
+-   The application's progression system is now entirely category-based. Do not reference global levels or a global leaderboard.
+-   The latest major feature is the social wall on the category detail page. This feature is functionally complete but requires thorough testing on both the backend and frontend before it can be considered finished.
+-   The user's primary language is French. All communication must be in French.
 
 **documents created in this job**
-  - /app/memory/PRD.md
-  - /app/design_guidelines.json
-  - /app/test_reports/iteration_1.json
+- None.
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  **User:** How is XP calculated? (Agent explained and asked for changes).
-2.  **User:** Provided detailed specs for a new engagement system (XP, win streaks, etc.).
-3.  **User:** (Implicit) Awaiting completion of the new engagement system.
-4.  **User:** Correct rounded corners, add progress bar, animate score bars. (Agent implemented).
-5.  **User:** The score bars don't evolve and triangles aren't aligned. (Agent fixed).
-6.  **User:** The triangles should point inwards. (Agent fixed).
-7.  **User:** Wants evolutive score bars and centered triangles. (Agent fixed).
-8.  **User:** Wants the game screen redesigned based on a reference image. (Agent redesigned).
-9.  **User (Final):** Please use ask_human tool and confirm your plan now. This was the last instruction, indicating the next agent should start by presenting a plan.
+1.  : Provided an image and a detailed request for a new category page with social features (play/follow/leaderboard buttons, stats, and a community wall for posts, comments, likes).
+2.  : Acknowledged the request and started working on the backend.
+3.  : Created backend database models for the new social features.
+4.  : Added the new tables to the database in .
+5.  : Added Pydantic models for the social APIs.
+6.  : Implemented all the new social endpoints in .
+7.  : Confirmed the backend was running and started work on the frontend.
+8.  : Created the new  file.
+9.  : Modified  to link to the new category detail pages.
+10. : Took screenshots confirming the new home screen and the new (empty) category detail page are visually correct, then declared the work done and restarted expo.
 
 **Project Health Check:**
-- **Broken:** None
-- **Mocked:** The bot opponent is mocked by the backend, which is by design.
+- **Broken**: Nothing appears to be outright broken, but the newest feature is untested.
+- **Mocked**: The matchmaking system creates mock Bot opponents when a human isn't available, which is an intentional feature.
 
 **3rd Party Integrations**
-- **Supabase:** Used as the primary PostgreSQL database.
+- None explicitly mentioned or added in this session, though  was integrated for the post creation feature.
 
 **Testing status**
-- Testing agent used after significant changes: YES (after initial MVP build).
-- Troubleshoot agent used after agent stuck in loop: NO.
-- Test files created: None.
-- Known regressions: None.
+-   **Testing agent used after significant changes:** YES,  was used to validate the first major feature change (category-based progression). It has NOT been used for the newest social wall feature.
+-   **Troubleshoot agent used after agent stuck in loop:** NO
+-   **Test files created:** None.
+-   **Known regressions:** None.
 
 **Credentials to test flow:**
-The app uses a guest authentication flow. To test, start the application and enter a unique username on the initial screen.
+- User registration is as a guest. A unique pseudo/username is required to log in.
 
 **What agent forgot to execute**
-The previous agent was instructed to create a plan and use the  tool to confirm it with the user. The session ended before this action was completed. The next agent must start by creating a plan based on the Last working item and Pending Issues and confirming it with the user.
+- The agent has not yet run any tests (backend or frontend) for the newly created social wall feature. While the UI was visually verified, the core functionality (creating posts/comments/likes) remains unvalidated.
+- The Classement (Leaderboard) button on the new category page is present in the UI but is not hooked up to any functionality, as the corresponding backend endpoint and frontend screen have not been created yet.
+
 </analysis>
+<SYS_PROMPT_SEPARATOR>
+<workspace_dir>
+/app
+</workspace_dir>
+
