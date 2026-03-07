@@ -802,6 +802,11 @@ CATEGORY_DESCRIPTIONS = {
     "series_tv": "Les plus grandes séries TV de tous les temps",
     "geographie": "Capitales, pays et merveilles du monde",
     "histoire": "Les grands événements qui ont façonné le monde",
+    "cinema": "Le meilleur du 7e art, d'Hollywood à Cannes",
+    "sport": "Football, tennis, JO et toutes les disciplines",
+    "musique": "Rock, pop, rap, classique et tous les genres",
+    "sciences": "Physique, chimie, biologie et l'univers",
+    "gastronomie": "Recettes, chefs étoilés et terroirs du monde",
 }
 
 class WallPostCreate(BaseModel):
@@ -821,8 +826,7 @@ class FollowToggle(BaseModel):
 async def get_category_detail(category_id: str, user_id: Optional[str] = None, db: AsyncSession = Depends(get_db)):
     """Full category detail with user-specific data."""
     # Validate category
-    cat_names = {"series_tv": "Séries TV Cultes", "geographie": "Géographie Mondiale", "histoire": "Histoire de France"}
-    if category_id not in cat_names:
+    if category_id not in CATEGORY_MAP:
         raise HTTPException(status_code=404, detail="Catégorie introuvable")
 
     # Total questions in category
@@ -873,7 +877,7 @@ async def get_category_detail(category_id: str, user_id: Optional[str] = None, d
 
     return {
         "id": category_id,
-        "name": cat_names[category_id],
+        "name": CATEGORY_MAP[category_id],
         "description": CATEGORY_DESCRIPTIONS.get(category_id, ""),
         "total_questions": total_questions,
         "followers_count": followers_count,
@@ -1496,6 +1500,382 @@ async def get_unread_count(user_id: str, db: AsyncSession = Depends(get_db)):
         )
     )
     return {"unread_count": result.scalar() or 0}
+
+
+# ── Search System ──
+
+# Theme tags: broad keyword associations for each category
+CATEGORY_TAGS = {
+    "series_tv": ["séries", "tv", "télé", "netflix", "streaming", "saison", "épisode", "acteur", "actrice", "binge", "sitcom", "drama", "thriller", "horror", "comédie", "game of thrones", "breaking bad", "stranger things", "squid game", "friends", "walking dead", "house of the dragon", "la casa de papel", "naruto", "anime", "manga", "one piece", "disney+", "hbo", "amazon", "prime"],
+    "geographie": ["géo", "pays", "capitale", "continent", "océan", "montagne", "fleuve", "rivière", "carte", "monde", "terre", "espace", "planète", "atlas", "drapeau", "frontière", "île", "désert", "forêt", "ville", "europe", "asie", "afrique", "amérique", "voyage", "tourisme", "climat", "population", "nature", "nasa"],
+    "histoire": ["histoire", "guerre", "roi", "reine", "empire", "révolution", "moyen-âge", "antiquité", "pharaon", "rome", "grèce", "égypte", "napoléon", "louis", "renaissance", "bataille", "conquête", "civilisation", "archéologie", "château", "chevalier", "croisade", "découverte", "exploration", "viking", "samurai", "cleopatre", "césar"],
+    "cinema": ["cinéma", "film", "réalisateur", "oscar", "cannes", "hollywood", "bollywood", "acteur", "actrice", "scénario", "box office", "marvel", "dc", "star wars", "lord of the rings", "harry potter", "james bond", "tarantino", "spielberg", "nolan", "animation", "pixar", "studio ghibli", "horreur", "comédie", "action", "science-fiction", "fantastique"],
+    "sport": ["sport", "football", "foot", "tennis", "basket", "nba", "rugby", "f1", "formule 1", "jeux olympiques", "jo", "coupe du monde", "ligue", "champion", "athlète", "compétition", "match", "marathon", "cyclisme", "natation", "boxe", "mma", "ufc", "messi", "ronaldo", "mbappé", "psg", "real madrid", "fifa"],
+    "musique": ["musique", "chanson", "chanteur", "chanteuse", "concert", "album", "groupe", "rock", "pop", "rap", "hip-hop", "jazz", "classique", "electro", "techno", "reggae", "r&b", "soul", "metal", "punk", "guitare", "piano", "batterie", "festival", "grammy", "eurovision", "beyoncé", "drake", "taylor swift", "k-pop", "bts"],
+    "sciences": ["sciences", "science", "physique", "chimie", "biologie", "mathématiques", "maths", "espace", "astronomie", "planète", "étoile", "galaxie", "nasa", "einstein", "darwin", "newton", "atome", "molécule", "adn", "génétique", "intelligence artificielle", "ia", "robot", "technologie", "invention", "découverte", "médecine", "virus", "vaccin", "quantique"],
+    "gastronomie": ["gastronomie", "cuisine", "recette", "chef", "restaurant", "étoilé", "michelin", "pâtisserie", "dessert", "fromage", "vin", "boulangerie", "chocolat", "saveur", "épice", "ingrédient", "top chef", "cauchemar en cuisine", "meilleur pâtissier", "sushi", "pizza", "burger", "vegan", "bio", "terroir", "tradition", "brasserie"],
+}
+
+# Difficulty mapping based on level thresholds
+DIFFICULTY_LEVELS = {
+    "debutant": {"min": 0, "max": 5, "label": "Débutant"},
+    "intermediaire": {"min": 6, "max": 19, "label": "Intermédiaire"},
+    "avance": {"min": 20, "max": 34, "label": "Avancé"},
+    "expert": {"min": 35, "max": 50, "label": "Expert"},
+}
+
+
+@api_router.get("/search/themes")
+async def search_themes(
+    q: Optional[str] = None,
+    difficulty: Optional[str] = None,
+    user_id: Optional[str] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """Search themes by keyword with tag matching and difficulty filter."""
+    results = []
+    query_lower = (q or "").strip().lower()
+
+    # Get user data if available
+    user = None
+    if user_id:
+        u_res = await db.execute(select(User).where(User.id == user_id))
+        user = u_res.scalar_one_or_none()
+
+    for cat_id, cat_name in CATEGORY_MAP.items():
+        # Calculate relevance score
+        score = 0
+
+        if query_lower:
+            # Exact category name match
+            if query_lower in cat_name.lower():
+                score += 100
+            # Category id match
+            if query_lower in cat_id.replace("_", " "):
+                score += 80
+            # Tag matching
+            tags = CATEGORY_TAGS.get(cat_id, [])
+            for tag in tags:
+                if query_lower in tag or tag in query_lower:
+                    score += 30
+                # Partial match
+                elif any(word in tag for word in query_lower.split()):
+                    score += 10
+        else:
+            score = 50  # Default score when no query
+
+        if score == 0 and query_lower:
+            continue  # Skip non-matching categories
+
+        # Get category stats
+        xp_field = CATEGORY_XP_FIELD.get(cat_id)
+        user_level = 0
+        user_xp = 0
+        user_title = ""
+        is_following = False
+
+        if user and xp_field:
+            user_xp = getattr(user, xp_field, 0)
+            user_level = get_category_level(user_xp)
+            user_title = get_category_title(cat_id, user_level)
+            # Check follow
+            f_res = await db.execute(
+                select(CategoryFollow).where(
+                    CategoryFollow.user_id == user_id,
+                    CategoryFollow.category_id == cat_id
+                )
+            )
+            is_following = f_res.scalar_one_or_none() is not None
+
+        # Difficulty filter
+        if difficulty and difficulty in DIFFICULTY_LEVELS:
+            d = DIFFICULTY_LEVELS[difficulty]
+            if user_level < d["min"] or user_level > d["max"]:
+                continue
+
+        # Question count
+        q_count = await db.execute(
+            select(func.count(Question.id)).where(Question.category == cat_id)
+        )
+        total_questions = q_count.scalar() or 0
+
+        # Player count (users who played this category)
+        player_count_res = await db.execute(
+            select(func.count(User.id)).where(getattr(User, xp_field) > 0)
+        ) if xp_field else None
+        player_count = player_count_res.scalar() if player_count_res else 0
+
+        # Followers count
+        f_count = await db.execute(
+            select(func.count(CategoryFollow.id)).where(CategoryFollow.category_id == cat_id)
+        )
+        followers_count = f_count.scalar() or 0
+
+        # Get difficulty label based on user level
+        difficulty_label = "Nouveau"
+        for d_key, d_val in DIFFICULTY_LEVELS.items():
+            if d_val["min"] <= user_level <= d_val["max"]:
+                difficulty_label = d_val["label"]
+                break
+
+        results.append({
+            "id": cat_id,
+            "name": cat_name,
+            "description": CATEGORY_DESCRIPTIONS.get(cat_id, ""),
+            "total_questions": total_questions,
+            "player_count": player_count,
+            "followers_count": followers_count,
+            "user_level": user_level,
+            "user_title": user_title,
+            "is_following": is_following,
+            "difficulty_label": difficulty_label,
+            "relevance_score": score,
+        })
+
+    # Sort by relevance
+    results.sort(key=lambda x: x["relevance_score"], reverse=True)
+    return results
+
+
+@api_router.get("/search/players")
+async def search_players_enhanced(
+    q: Optional[str] = None,
+    title: Optional[str] = None,
+    category: Optional[str] = None,
+    country: Optional[str] = None,
+    min_level: Optional[int] = None,
+    limit: int = 20,
+    db: AsyncSession = Depends(get_db)
+):
+    """Enhanced player search: by pseudo, title, category, country, and level."""
+    query = select(User)
+
+    # Pseudo search (supports @pseudo exact match)
+    if q and q.strip():
+        search_term = q.strip()
+        if search_term.startswith("@"):
+            # Exact pseudo match
+            query = query.where(User.pseudo == search_term[1:])
+        else:
+            query = query.where(User.pseudo.ilike(f"%{search_term}%"))
+
+    # Country filter
+    if country and country.strip():
+        query = query.where(User.country.ilike(f"%{country.strip()}%"))
+
+    # Category XP filter
+    if category and category in CATEGORY_XP_FIELD:
+        xp_field = CATEGORY_XP_FIELD[category]
+        if min_level and min_level > 0:
+            min_xp = get_cumulative_xp(min_level)
+            query = query.where(getattr(User, xp_field) >= min_xp)
+        query = query.order_by(getattr(User, xp_field).desc())
+    else:
+        query = query.order_by(User.total_xp.desc())
+
+    result = await db.execute(query.limit(limit))
+    users = result.scalars().all()
+
+    players = []
+    for u in users:
+        best_cat = None
+        best_level = 0
+        for cat_key, xp_f in CATEGORY_XP_FIELD.items():
+            lvl = get_category_level(getattr(u, xp_f, 0))
+            if lvl > best_level:
+                best_level = lvl
+                best_cat = cat_key
+
+        player_title = u.selected_title or (get_category_title(best_cat, best_level) if best_cat else "Novice")
+
+        # Filter by title if specified
+        if title and title.strip():
+            title_lower = title.strip().lower()
+            if title_lower not in player_title.lower():
+                # Also check all unlocked titles
+                all_titles = get_all_unlocked_titles(u)
+                title_names = [t["title"].lower() for t in all_titles]
+                if not any(title_lower in tn for tn in title_names):
+                    continue
+
+        # Category-specific level if category filter is active
+        cat_level = 0
+        cat_title = ""
+        if category and category in CATEGORY_XP_FIELD:
+            cat_xp = getattr(u, CATEGORY_XP_FIELD[category], 0)
+            cat_level = get_category_level(cat_xp)
+            cat_title = get_category_title(category, cat_level)
+
+        players.append({
+            "id": u.id,
+            "pseudo": u.pseudo,
+            "avatar_seed": u.avatar_seed,
+            "country": u.country,
+            "country_flag": COUNTRY_FLAGS.get(u.country or "", "🌍"),
+            "total_xp": u.total_xp,
+            "matches_played": u.matches_played,
+            "selected_title": player_title,
+            "best_category": best_cat,
+            "best_level": best_level,
+            "cat_level": cat_level,
+            "cat_title": cat_title,
+        })
+
+    return players
+
+
+@api_router.get("/search/content")
+async def search_content(
+    q: str,
+    category: Optional[str] = None,
+    user_id: Optional[str] = None,
+    limit: int = 20,
+    db: AsyncSession = Depends(get_db)
+):
+    """Search wall posts and comments by content."""
+    if not q or not q.strip():
+        return {"posts": [], "comments": []}
+
+    search_term = q.strip()
+
+    # Search in wall posts
+    post_query = select(WallPost).where(WallPost.content.ilike(f"%{search_term}%"))
+    if category:
+        post_query = post_query.where(WallPost.category_id == category)
+    post_query = post_query.order_by(WallPost.created_at.desc()).limit(limit)
+    post_result = await db.execute(post_query)
+    posts = post_result.scalars().all()
+
+    post_data = []
+    for p in posts:
+        # Get author info
+        u_res = await db.execute(select(User).where(User.id == p.user_id))
+        author = u_res.scalar_one_or_none()
+
+        # Likes count
+        likes_res = await db.execute(
+            select(func.count(PostLike.id)).where(PostLike.post_id == p.id)
+        )
+        likes_count = likes_res.scalar() or 0
+
+        # Comments count
+        comments_res = await db.execute(
+            select(func.count(PostComment.id)).where(PostComment.post_id == p.id)
+        )
+        comments_count = comments_res.scalar() or 0
+
+        # Is liked by user
+        is_liked = False
+        if user_id:
+            like_check = await db.execute(
+                select(PostLike).where(PostLike.user_id == user_id, PostLike.post_id == p.id)
+            )
+            is_liked = like_check.scalar_one_or_none() is not None
+
+        post_data.append({
+            "id": p.id,
+            "category_id": p.category_id,
+            "category_name": CATEGORY_MAP.get(p.category_id, p.category_id),
+            "user": {
+                "id": author.id if author else "",
+                "pseudo": author.pseudo if author else "Inconnu",
+                "avatar_seed": author.avatar_seed if author else "",
+            },
+            "content": p.content,
+            "has_image": bool(p.image_base64),
+            "likes_count": likes_count,
+            "comments_count": comments_count,
+            "is_liked": is_liked,
+            "created_at": p.created_at.isoformat(),
+        })
+
+    # Search in comments
+    comment_query = select(PostComment).where(PostComment.content.ilike(f"%{search_term}%"))
+    comment_query = comment_query.order_by(PostComment.created_at.desc()).limit(limit)
+    comment_result = await db.execute(comment_query)
+    comments = comment_result.scalars().all()
+
+    comment_data = []
+    for c in comments:
+        u_res = await db.execute(select(User).where(User.id == c.user_id))
+        author = u_res.scalar_one_or_none()
+
+        # Get parent post info
+        p_res = await db.execute(select(WallPost).where(WallPost.id == c.post_id))
+        parent_post = p_res.scalar_one_or_none()
+
+        comment_data.append({
+            "id": c.id,
+            "post_id": c.post_id,
+            "category_id": parent_post.category_id if parent_post else "",
+            "category_name": CATEGORY_MAP.get(parent_post.category_id, "") if parent_post else "",
+            "user": {
+                "id": author.id if author else "",
+                "pseudo": author.pseudo if author else "Inconnu",
+                "avatar_seed": author.avatar_seed if author else "",
+            },
+            "content": c.content,
+            "created_at": c.created_at.isoformat(),
+        })
+
+    return {"posts": post_data, "comments": comment_data}
+
+
+@api_router.get("/search/trending")
+async def get_trending(db: AsyncSession = Depends(get_db)):
+    """Get trending tags and popular categories."""
+    # Most played categories (by total matches)
+    popular_cats = []
+    for cat_id, cat_name in CATEGORY_MAP.items():
+        m_count = await db.execute(
+            select(func.count(Match.id)).where(Match.category == cat_id)
+        )
+        count = m_count.scalar() or 0
+        popular_cats.append({"id": cat_id, "name": cat_name, "match_count": count})
+
+    popular_cats.sort(key=lambda x: x["match_count"], reverse=True)
+
+    # Most followed categories
+    popular_follows = []
+    for cat_id, cat_name in CATEGORY_MAP.items():
+        f_count = await db.execute(
+            select(func.count(CategoryFollow.id)).where(CategoryFollow.category_id == cat_id)
+        )
+        count = f_count.scalar() or 0
+        popular_follows.append({"id": cat_id, "name": cat_name, "followers": count})
+
+    popular_follows.sort(key=lambda x: x["followers"], reverse=True)
+
+    # Trending tags (hardcoded + dynamic)
+    trending_tags = [
+        {"tag": "Squid Game 3", "icon": "🦑", "type": "hot"},
+        {"tag": "Champions League", "icon": "⚽", "type": "hot"},
+        {"tag": "IA & Robots", "icon": "🤖", "type": "trend"},
+        {"tag": "Star Wars", "icon": "⭐", "type": "classic"},
+        {"tag": "Gastronomie française", "icon": "🥐", "type": "trend"},
+        {"tag": "Histoire de France", "icon": "🏰", "type": "classic"},
+        {"tag": "K-Pop", "icon": "🎤", "type": "trend"},
+        {"tag": "Astronomie", "icon": "🔭", "type": "hot"},
+    ]
+
+    # Top players (most active recently)
+    top_players_res = await db.execute(
+        select(User).order_by(User.total_xp.desc()).limit(5)
+    )
+    top_players = top_players_res.scalars().all()
+    top_players_data = [{
+        "id": u.id,
+        "pseudo": u.pseudo,
+        "avatar_seed": u.avatar_seed,
+        "total_xp": u.total_xp,
+        "country_flag": COUNTRY_FLAGS.get(u.country or "", "🌍"),
+    } for u in top_players]
+
+    return {
+        "popular_categories": popular_cats[:5],
+        "trending_tags": trending_tags,
+        "top_players": top_players_data,
+    }
 
 
 # ── Admin Routes ──

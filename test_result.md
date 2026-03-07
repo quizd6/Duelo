@@ -463,15 +463,78 @@ metadata:
     file: "frontend/app/category-detail.tsx"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
         - working: "NA"
           agent: "main"
           comment: "New page with header, follow/play/leaderboard buttons, progress bar, stats, social wall with posts/likes/comments. Needs frontend testing."
 
+  - task: "Search Themes API"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: "GET /api/search/themes?q=&difficulty=&user_id= - Keyword-based theme search with tag matching system. Supports difficulty filter (debutant/intermediaire/avance/expert). Returns categories with relevance score, stats, user-specific data. Validated via curl: 'espace' returns Géographie + Sciences."
+        - working: true
+          agent: "testing"
+          comment: "Comprehensive testing complete. Tested all requirements from review request: 1) No query returns all 8 categories with proper structure (id, name, description, total_questions, player_count, followers_count, user_level, user_title, is_following, difficulty_label, relevance_score). 2) q=espace correctly returns Géographie and Sciences via tag matching. 3) q=star wars returns Séries TV and Cinéma. 4) q=foot returns Sport category. 5) difficulty=debutant filter working. 6) user_id parameter includes user-specific data (user_level, user_title, is_following). Tag matching system functional with relevance scoring. All search scenarios working as specified."
+
+  - task: "Search Players Enhanced API"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: "GET /api/search/players?q=&title=&category=&country=&min_level= - Enhanced player search with @pseudo exact match, title filter, category filter, country search. Returns enriched player data. Validated via curl."
+        - working: true
+          agent: "testing"
+          comment: "Enhanced player search fully functional. Tested all requirements from review request: 1) @pseudo exact match working correctly - finds specific user when prefixed with @. 2) Partial pseudo search working for substring matches. 3) title=Téléspectateur filter working properly. 4) category=series_tv filter functional. 5) Complete player object structure validated with all required fields: id, pseudo, avatar_seed, country, country_flag, total_xp, matches_played, selected_title, best_category, best_level, cat_level, cat_title. Search handles empty results correctly. All search modes working as specified."
+
+  - task: "Search Content API"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: "GET /api/search/content?q=&category=&user_id= - Search wall posts and comments by content text. Returns {posts:[], comments:[]} with full data including author info, likes, comments counts. Validated via curl."
+        - working: true
+          agent: "testing"
+          comment: "Content search in wall posts and comments fully functional. Tested all requirements from review request: 1) Created wall post and comment for testing. 2) Search by content text working correctly - finds matching posts and comments. 3) Response structure validated: {posts: [...], comments: [...]}. 4) Post fields verified: id, category_id, category_name, user, content, has_image, likes_count, comments_count, is_liked, created_at. 5) Comment fields verified: id, post_id, category_id, category_name, user, content, created_at. 6) Empty query returns empty arrays as expected. Content search working as specified for both posts and comments."
+
+  - task: "Search Trending API"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: "GET /api/search/trending - Returns popular categories, trending tags (hardcoded + dynamic), top players. Validated via curl."
+        - working: true
+          agent: "testing"
+          comment: "Trending data API fully functional. Tested all requirements from review request: 1) Response structure validated: {popular_categories: [...], trending_tags: [...], top_players: [...]}. 2) popular_categories contains 5 entries with correct fields: id, name, match_count. 3) trending_tags contains 8 entries with correct fields: tag, icon, type. 4) top_players contains 5 entries with correct fields: id, pseudo, avatar_seed, total_xp, country_flag. All trending data structures working as specified."
+
 test_plan:
   current_focus:
-    - "Category Detail Frontend Page"
+    - "Search Themes API"
+    - "Search Players Enhanced API"
+    - "Search Content API"
+    - "Search Trending API"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
@@ -487,3 +550,7 @@ agent_communication:
       message: "✅ SOCIAL WALL BACKEND TESTING COMPLETE - ALL 6 APIs FULLY FUNCTIONAL. Comprehensive testing performed following exact review request flow: 1) Guest registration working with proper pseudo validation. 2) Category detail API tested for all 3 categories (series_tv, geographie, histoire) - returns complete user-specific data including level, title, XP, follow status, completion %. 3) Follow/unfollow toggle working perfectly - properly updates followers count and follow status. 4) Category leaderboard returns top users with correct rank, pseudo, avatar_seed, level, title, XP data. 5) Wall posts creation/retrieval fully functional - posts created with proper user data, likes_count, comments_count, is_liked flag. 6) Like toggle working correctly - toggles like/unlike state and updates counts. 7) Comments creation/retrieval working - proper user objects, content validation. 8) Invalid cases properly handled - empty content rejected with 400, invalid categories rejected. Complete test flow executed: register → get category detail → follow category → create post → like post → unlike → comment → get comments → get wall posts → get leaderboard → unfollow → test invalid cases. All social wall backend APIs ready for production use."
     - agent: "testing"
       message: "🎯 NEW SOCIAL FEATURES BACKEND TESTING COMPLETE - ALL 7 APIs FULLY FUNCTIONAL ✅ Comprehensive testing performed following exact review request specifications: 1) Player Profile API (GET /api/player/{user_id}/profile?viewer_id=X) - Returns complete public profile with all required fields: pseudo, avatar_seed, selected_title, country, country_flag, matches_played, followers_count, following_count, is_following flag, per-category stats (xp/level/title), champion_titles array, cross-category posts with likes/comments. 2) Player Follow System (POST /api/player/{user_id}/follow) - Toggle functionality working perfectly, self-follow rejected (400), followers count updates correctly. 3) Player Search (GET /api/players/search) - Search by pseudo, category filtering, empty results handled properly. 4) Chat Send (POST /api/chat/send) - Full validation working: empty messages (400), >500 chars (400), self-messages (400). 5) Chat Conversations (GET /api/chat/conversations/{user_id}) - Returns conversations with unread counts, 7-day TTL cleanup working. 6) Chat Messages (GET /api/chat/{user_id}/messages) - Auto-marks as read, proper message structure. 7) Chat Unread Count (GET /api/chat/unread-count/{user_id}) - Accurate counting, updates on read. Full test flow executed: register 2 users → get profile → follow/unfollow → search players → send message → check conversations → fetch messages → check unread counts → validate error cases. ALL NEW SOCIAL FEATURES READY FOR PRODUCTION."
+    - agent: "main"
+      message: "NEW SEARCH SYSTEM IMPLEMENTATION. Added 4 new backend API endpoints for comprehensive search functionality. Please test ONLY the new search APIs: 1) GET /api/search/themes?q=espace - Should return matching categories (Géographie, Sciences) based on keyword tags. Test with various keywords: 'star wars', 'foot', 'cuisine'. Also test difficulty filter: &difficulty=debutant. Also test with user_id parameter for user-specific data. 2) GET /api/search/players?q=@pseudo - Exact pseudo search. Test also with &title=Téléspectateur to filter by title. Test category filter &category=series_tv. 3) GET /api/search/content?q=test - Search wall posts and comments by content. Should return {posts:[], comments:[]}. 4) GET /api/search/trending - Should return {popular_categories, trending_tags, top_players}. Registration: POST /api/auth/register-guest {pseudo}. Create wall posts first to test content search: POST /api/category/series_tv/wall {user_id, content}. DO NOT retest previously tested APIs."
+    - agent: "testing"
+      message: "🔍 NEW SEARCH SYSTEM BACKEND TESTING COMPLETE - ALL 4 APIs FULLY FUNCTIONAL ✅ Comprehensive testing performed following exact review request specifications: 1) Search Themes API (GET /api/search/themes) - Returns all 8 categories with no query, keyword matching working perfectly (espace→Géographie+Sciences, star wars→Séries TV+Cinéma, foot→Sport). Difficulty filter functional. User-specific data with user_id parameter working. All required fields validated: id, name, description, total_questions, player_count, followers_count, user_level, user_title, is_following, difficulty_label, relevance_score. 2) Search Players API (GET /api/search/players) - @pseudo exact match working, partial search functional, title and category filters working. All required fields validated: id, pseudo, avatar_seed, country, country_flag, total_xp, matches_played, selected_title, best_category, best_level, cat_level, cat_title. 3) Search Content API (GET /api/search/content) - Wall posts and comments search working. Created test post/comment for validation. Response structure {posts:[], comments:[]} correct. Post and comment field validation complete. Empty query returns empty arrays. 4) Search Trending API (GET /api/search/trending) - Returns proper structure: 5 popular categories, 8 trending tags, 5 top players. All field validation complete. ALL NEW SEARCH SYSTEM APIs READY FOR PRODUCTION."

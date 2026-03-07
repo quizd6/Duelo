@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Comprehensive backend testing for Duelo quiz app - NEW Social Features Testing.
-Tests Player Profiles, Player Follow, Chat System, and Player Search endpoints.
+Comprehensive backend testing for Duelo quiz app - NEW Search System Testing.
+Tests the 4 new search endpoints: themes, players, content, and trending.
 """
 
 import asyncio
@@ -12,25 +12,21 @@ import random
 from typing import Dict, Any, Optional
 
 # Base URL from frontend/.env
-BASE_URL = "https://trivia-battle-13.preview.emergentagent.com/api"
+BASE_URL = "https://duelo-header-footer.preview.emergentagent.com/api"
 
-class DueloAPITester:
+class DueloSearchTester:
     def __init__(self):
         self.session = None
-        self.test_user_a_id = None
-        self.test_user_a_pseudo = None
-        self.test_user_b_id = None
-        self.test_user_b_pseudo = None
+        self.test_user_id = None
+        self.test_user_pseudo = None
+        self.wall_post_id = None
+        self.wall_comment_id = None
         self.results = {
-            "guest_registration_a": {"status": "pending", "details": None},
-            "guest_registration_b": {"status": "pending", "details": None},
-            "player_profile": {"status": "pending", "details": None},
-            "player_follow": {"status": "pending", "details": None},
-            "player_search": {"status": "pending", "details": None},
-            "chat_send": {"status": "pending", "details": None},
-            "chat_conversations": {"status": "pending", "details": None},
-            "chat_messages": {"status": "pending", "details": None},
-            "chat_unread_count": {"status": "pending", "details": None}
+            "guest_registration": {"status": "pending", "details": None},
+            "search_themes": {"status": "pending", "details": None},
+            "search_players": {"status": "pending", "details": None},
+            "search_content": {"status": "pending", "details": None},
+            "search_trending": {"status": "pending", "details": None}
         }
 
     async def __aenter__(self):
@@ -53,623 +49,456 @@ class DueloAPITester:
         if data and not success:
             print(f"   Response data: {json.dumps(data, indent=2)}")
 
-    async def test_guest_registration_a(self):
-        """Test guest user registration for Chat User A."""
-        print("\n=== Testing Guest Registration A ===")
+    async def test_guest_registration(self):
+        """Register a test user for search testing."""
+        print("\n=== Testing Guest Registration ===")
         
-        # Generate unique pseudo as specified in review request
-        timestamp = str(int(time.time()))[-4:]  # Last 4 digits of timestamp
-        pseudo = f"ChatUserA_{timestamp}"
-        
-        try:
-            async with self.session.post(f"{BASE_URL}/auth/register-guest", 
-                                       json={"pseudo": pseudo}) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    self.test_user_a_id = data.get("id")
-                    self.test_user_a_pseudo = data.get("pseudo")
-                    
-                    # Validate response structure
-                    required_fields = ["id", "pseudo", "is_guest", "avatar_seed", "total_xp", "current_streak"]
-                    missing_fields = [field for field in required_fields if field not in data]
-                    
-                    if missing_fields:
-                        await self.log_result("guest_registration_a", False, 
-                                            f"Missing fields: {missing_fields}", data)
-                        return False
-                    
-                    if not data.get("is_guest"):
-                        await self.log_result("guest_registration_a", False, 
-                                            "User should be marked as guest", data)
-                        return False
-                    
-                    await self.log_result("guest_registration_a", True, 
-                                        f"Created ChatUserA: {pseudo} (ID: {self.test_user_a_id})", data)
-                    return True
-                else:
-                    error_data = await response.text()
-                    await self.log_result("guest_registration_a", False, 
-                                        f"HTTP {response.status}: {error_data}")
-                    return False
-                    
-        except Exception as e:
-            await self.log_result("guest_registration_a", False, f"Exception: {str(e)}")
-            return False
-
-    async def test_guest_registration_b(self):
-        """Test guest user registration for Chat User B."""
-        print("\n=== Testing Guest Registration B ===")
-        
-        # Generate unique pseudo as specified in review request
-        timestamp = str(int(time.time()))[-4:]  # Last 4 digits of timestamp  
-        pseudo = f"ChatUserB_{timestamp}"
+        timestamp = str(int(time.time()))[-4:]
+        pseudo = f"SearchTester_{timestamp}"
         
         try:
             async with self.session.post(f"{BASE_URL}/auth/register-guest", 
                                        json={"pseudo": pseudo}) as response:
                 if response.status == 200:
                     data = await response.json()
-                    self.test_user_b_id = data.get("id")
-                    self.test_user_b_pseudo = data.get("pseudo")
+                    self.test_user_id = data.get("id")
+                    self.test_user_pseudo = data.get("pseudo")
                     
-                    # Validate response structure
-                    required_fields = ["id", "pseudo", "is_guest", "avatar_seed", "total_xp", "current_streak"]
-                    missing_fields = [field for field in required_fields if field not in data]
-                    
-                    if missing_fields:
-                        await self.log_result("guest_registration_b", False, 
-                                            f"Missing fields: {missing_fields}", data)
-                        return False
-                    
-                    if not data.get("is_guest"):
-                        await self.log_result("guest_registration_b", False, 
-                                            "User should be marked as guest", data)
-                        return False
-                    
-                    await self.log_result("guest_registration_b", True, 
-                                        f"Created ChatUserB: {pseudo} (ID: {self.test_user_b_id})", data)
+                    await self.log_result("guest_registration", True, 
+                                        f"Created test user: {pseudo} (ID: {self.test_user_id})", data)
                     return True
                 else:
                     error_data = await response.text()
-                    await self.log_result("guest_registration_b", False, 
+                    await self.log_result("guest_registration", False, 
                                         f"HTTP {response.status}: {error_data}")
                     return False
                     
         except Exception as e:
-            await self.log_result("guest_registration_b", False, f"Exception: {str(e)}")
+            await self.log_result("guest_registration", False, f"Exception: {str(e)}")
             return False
 
-    async def test_player_profile(self):
-        """Test GET /api/player/{user_id}/profile?viewer_id=X - Full public profile."""
-        print("\n=== Testing Player Profile API ===")
-        
-        if not self.test_user_a_id or not self.test_user_b_id:
-            await self.log_result("player_profile", False, "Both test users needed for profile testing")
-            return False
+    async def test_search_themes(self):
+        """Test GET /api/search/themes - Theme search by keyword with tag matching."""
+        print("\n=== Testing Search Themes API ===")
         
         try:
-            # Test Player A's profile from Player B's perspective
-            async with self.session.get(f"{BASE_URL}/player/{self.test_user_a_id}/profile?viewer_id={self.test_user_b_id}") as response:
-                if response.status == 200:
-                    data = await response.json()
-                    
-                    # Validate required fields from review request
-                    required_fields = [
-                        "id", "pseudo", "avatar_seed", "selected_title", "country", "country_flag",
-                        "matches_played", "followers_count", "following_count", "is_following",
-                        "categories", "champion_titles", "posts"
-                    ]
-                    missing_fields = [field for field in required_fields if field not in data]
-                    
-                    if missing_fields:
-                        await self.log_result("player_profile", False, 
-                                            f"Missing profile fields: {missing_fields}", data)
-                        return False
-                    
-                    # Validate categories structure (per-category stats)
-                    categories = data.get("categories", {})
-                    expected_categories = ["series_tv", "geographie", "histoire"]
-                    for cat in expected_categories:
-                        if cat not in categories:
-                            await self.log_result("player_profile", False, 
-                                                f"Missing category: {cat}", data)
-                            return False
-                        
-                        cat_data = categories[cat]
-                        cat_required = ["xp", "level", "title"]
-                        cat_missing = [f for f in cat_required if f not in cat_data]
-                        if cat_missing:
-                            await self.log_result("player_profile", False, 
-                                                f"Category {cat} missing fields: {cat_missing}", data)
-                            return False
-                    
-                    # Validate champion_titles is array
-                    if not isinstance(data.get("champion_titles"), list):
-                        await self.log_result("player_profile", False, 
-                                            "champion_titles should be an array", data)
-                        return False
-                    
-                    # Validate posts is array with proper structure
-                    if not isinstance(data.get("posts"), list):
-                        await self.log_result("player_profile", False, 
-                                            "posts should be an array", data)
-                        return False
-                    
-                    await self.log_result("player_profile", True, 
-                                        f"Player profile working - Pseudo: {data['pseudo']}, Categories: {len(categories)}, Posts: {len(data['posts'])}, Following: {data['is_following']}", 
-                                        data)
-                    return True
-                    
-                else:
-                    error_data = await response.text()
-                    await self.log_result("player_profile", False, 
-                                        f"HTTP {response.status}: {error_data}")
-                    return False
-                    
-        except Exception as e:
-            await self.log_result("player_profile", False, f"Exception: {str(e)}")
-            return False
-
-    async def test_player_follow(self):
-        """Test POST /api/player/{user_id}/follow - Toggle follow system."""
-        print("\n=== Testing Player Follow System ===")
-        
-        if not self.test_user_a_id or not self.test_user_b_id:
-            await self.log_result("player_follow", False, "Both test users needed for follow testing")
-            return False
-        
-        try:
-            # Test 1: Player B follows Player A
-            follow_data = {"follower_id": self.test_user_b_id}
-            
-            async with self.session.post(f"{BASE_URL}/player/{self.test_user_a_id}/follow", 
-                                       json=follow_data) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    
-                    if "following" not in data:
-                        await self.log_result("player_follow", False, 
-                                            "Response should contain 'following' field", data)
-                        return False
-                    
-                    if not data.get("following"):
-                        await self.log_result("player_follow", False, 
-                                            "First follow should return following: true", data)
-                        return False
-                    
-                    # Test 2: Verify followers_count increases in profile
-                    async with self.session.get(f"{BASE_URL}/player/{self.test_user_a_id}/profile?viewer_id={self.test_user_b_id}") as profile_resp:
-                        if profile_resp.status == 200:
-                            profile_data = await profile_resp.json()
-                            if profile_data.get("followers_count", 0) < 1:
-                                await self.log_result("player_follow", False, 
-                                                    "Followers count should increase after follow")
-                                return False
-                            if not profile_data.get("is_following"):
-                                await self.log_result("player_follow", False, 
-                                                    "is_following should be true after follow")
-                                return False
-                    
-                    # Test 3: Player B unfollows Player A (toggle)
-                    async with self.session.post(f"{BASE_URL}/player/{self.test_user_a_id}/follow", 
-                                               json=follow_data) as unfollow_resp:
-                        if unfollow_resp.status == 200:
-                            unfollow_data = await unfollow_resp.json()
-                            if unfollow_data.get("following"):
-                                await self.log_result("player_follow", False, 
-                                                    "Second follow should unfollow (toggle) and return following: false", unfollow_data)
-                                return False
-                    
-                    # Test 4: Self-follow should fail (400)
-                    self_follow_data = {"follower_id": self.test_user_a_id}
-                    async with self.session.post(f"{BASE_URL}/player/{self.test_user_a_id}/follow", 
-                                               json=self_follow_data) as self_resp:
-                        if self_resp.status != 400:
-                            await self.log_result("player_follow", False, 
-                                                "Self-follow should return 400 error")
-                            return False
-                    
-                    await self.log_result("player_follow", True, 
-                                        "Player follow system working - Follow/unfollow toggle works, self-follow rejected", 
-                                        data)
-                    return True
-                    
-                else:
-                    error_data = await response.text()
-                    await self.log_result("player_follow", False, 
-                                        f"HTTP {response.status}: {error_data}")
-                    return False
-                    
-        except Exception as e:
-            await self.log_result("player_follow", False, f"Exception: {str(e)}")
-            return False
-
-    async def test_player_search(self):
-        """Test GET /api/players/search - Search players with filters."""
-        print("\n=== Testing Player Search API ===")
-        
-        if not self.test_user_a_id or not self.test_user_b_id:
-            await self.log_result("player_search", False, "Test users needed for search testing")
-            return False
-        
-        try:
-            # Test 1: Search by pseudo (q parameter)
-            search_term = self.test_user_a_pseudo[:8]  # First 8 chars
-            async with self.session.get(f"{BASE_URL}/players/search?q={search_term}&limit=10") as response:
+            # Test 1: No query (should return all 8 categories)
+            async with self.session.get(f"{BASE_URL}/search/themes") as response:
                 if response.status == 200:
                     data = await response.json()
                     
                     if not isinstance(data, list):
-                        await self.log_result("player_search", False, 
-                                            "Search should return an array", data)
+                        await self.log_result("search_themes", False, 
+                                            "Response should be an array", data)
                         return False
                     
-                    # Should find at least our test user
-                    found_user = False
-                    for player in data:
-                        if player.get("id") == self.test_user_a_id:
-                            found_user = True
-                            # Validate player structure
-                            required_fields = ["id", "pseudo", "avatar_seed", "country", "country_flag", 
-                                             "total_xp", "matches_played", "selected_title"]
-                            missing = [f for f in required_fields if f not in player]
-                            if missing:
-                                await self.log_result("player_search", False, 
-                                                    f"Player missing fields: {missing}", player)
-                                return False
-                            break
+                    if len(data) != 8:
+                        await self.log_result("search_themes", False, 
+                                            f"Should return all 8 categories, got {len(data)}", data)
+                        return False
                     
-                    if not found_user and len(data) == 0:
-                        # Empty results are okay, just note it
-                        pass
-                
-                    # Test 2: Search by category filter
-                    async with self.session.get(f"{BASE_URL}/players/search?category=series_tv&limit=10") as cat_resp:
-                        if cat_resp.status == 200:
-                            cat_data = await cat_resp.json()
-                            if not isinstance(cat_data, list):
-                                await self.log_result("player_search", False, 
-                                                    "Category search should return an array", cat_data)
-                                return False
+                    # Validate structure of first category
+                    required_fields = ["id", "name", "description", "total_questions", 
+                                     "player_count", "followers_count", "user_level", 
+                                     "user_title", "is_following", "difficulty_label", "relevance_score"]
+                    missing_fields = [field for field in required_fields if field not in data[0]]
                     
-                    # Test 3: Search with empty results
-                    async with self.session.get(f"{BASE_URL}/players/search?q=NonExistentUserXYZ123&limit=10") as empty_resp:
-                        if empty_resp.status == 200:
-                            empty_data = await empty_resp.json()
-                            if not isinstance(empty_data, list):
-                                await self.log_result("player_search", False, 
-                                                    "Empty search should return empty array", empty_data)
-                                return False
-                    
-                    await self.log_result("player_search", True, 
-                                        f"Player search working - Pseudo search: {len(data)} results, Category search functional, Empty results handled", 
-                                        {"pseudo_results": len(data), "category_search": "OK"})
-                    return True
-                        
+                    if missing_fields:
+                        await self.log_result("search_themes", False, 
+                                            f"Missing theme fields: {missing_fields}", data[0])
+                        return False
                 else:
                     error_data = await response.text()
-                    await self.log_result("player_search", False, 
+                    await self.log_result("search_themes", False, 
                                         f"HTTP {response.status}: {error_data}")
                     return False
-                    
-        except Exception as e:
-            await self.log_result("player_search", False, f"Exception: {str(e)}")
-            return False
-
-    async def test_chat_send(self):
-        """Test POST /api/chat/send - Send chat message with validation."""
-        print("\n=== Testing Chat Send API ===")
-        
-        if not self.test_user_a_id or not self.test_user_b_id:
-            await self.log_result("chat_send", False, "Both test users needed for chat testing")
-            return False
-        
-        try:
-            # Test 1: Send valid message from A to B
-            message_content = "Hello from Player A! This is a test message for the new chat system."
-            chat_data = {
-                "sender_id": self.test_user_a_id,
-                "receiver_id": self.test_user_b_id,
-                "content": message_content
-            }
             
-            async with self.session.post(f"{BASE_URL}/chat/send", json=chat_data) as response:
+            # Test 2: Search with q=espace (should return Géographie and Sciences)
+            async with self.session.get(f"{BASE_URL}/search/themes?q=espace") as response:
                 if response.status == 200:
                     data = await response.json()
                     
-                    # Validate response structure
-                    required_fields = ["id", "sender_id", "receiver_id", "sender_pseudo", "content", "read", "created_at"]
-                    missing_fields = [field for field in required_fields if field not in data]
+                    # Should find categories with space/geography/sciences tags
+                    found_geo = any(cat["id"] == "geographie" for cat in data)
+                    found_sci = any(cat["id"] == "sciences" for cat in data)
                     
-                    if missing_fields:
-                        await self.log_result("chat_send", False, 
-                                            f"Chat response missing fields: {missing_fields}", data)
+                    if not (found_geo or found_sci):
+                        await self.log_result("search_themes", False, 
+                                            "Search 'espace' should return Géographie or Sciences", data)
                         return False
-                    
-                    if data.get("sender_id") != self.test_user_a_id:
-                        await self.log_result("chat_send", False, 
-                                            "Sender ID mismatch in response", data)
-                        return False
-                    
-                    if data.get("receiver_id") != self.test_user_b_id:
-                        await self.log_result("chat_send", False, 
-                                            "Receiver ID mismatch in response", data)
-                        return False
-                    
-                    if data.get("content") != message_content:
-                        await self.log_result("chat_send", False, 
-                                            "Message content mismatch in response", data)
-                        return False
-            
-            # Test 2: Empty message should fail (400)
-            empty_chat = {
-                "sender_id": self.test_user_a_id,
-                "receiver_id": self.test_user_b_id,
-                "content": ""
-            }
-            
-            async with self.session.post(f"{BASE_URL}/chat/send", json=empty_chat) as empty_resp:
-                if empty_resp.status != 400:
-                    await self.log_result("chat_send", False, 
-                                        "Empty message should return 400 error")
+                else:
+                    await self.log_result("search_themes", False, "Failed espace search")
                     return False
             
-            # Test 3: Too long message (>500 chars) should fail (400)
-            long_message = "x" * 501  # 501 characters
-            long_chat = {
-                "sender_id": self.test_user_a_id,
-                "receiver_id": self.test_user_b_id,
-                "content": long_message
-            }
-            
-            async with self.session.post(f"{BASE_URL}/chat/send", json=long_chat) as long_resp:
-                if long_resp.status != 400:
-                    await self.log_result("chat_send", False, 
-                                        "Message >500 chars should return 400 error")
+            # Test 3: Search with q=star+wars (should return Séries TV and Cinéma)
+            async with self.session.get(f"{BASE_URL}/search/themes?q=star%20wars") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    
+                    found_series = any(cat["id"] == "series_tv" for cat in data)
+                    found_cinema = any(cat["id"] == "cinema" for cat in data)
+                    
+                    if not (found_series or found_cinema):
+                        await self.log_result("search_themes", False, 
+                                            "Search 'star wars' should return Séries TV or Cinéma", data)
+                        return False
+                else:
+                    await self.log_result("search_themes", False, "Failed star wars search")
                     return False
             
-            # Test 4: Self-message should fail (400)
-            self_chat = {
-                "sender_id": self.test_user_a_id,
-                "receiver_id": self.test_user_a_id,
-                "content": "Talking to myself"
-            }
-            
-            async with self.session.post(f"{BASE_URL}/chat/send", json=self_chat) as self_resp:
-                if self_resp.status != 400:
-                    await self.log_result("chat_send", False, 
-                                        "Self-message should return 400 error")
+            # Test 4: Search with q=foot (should return Sport)
+            async with self.session.get(f"{BASE_URL}/search/themes?q=foot") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    
+                    found_sport = any(cat["id"] == "sport" for cat in data)
+                    
+                    if not found_sport:
+                        await self.log_result("search_themes", False, 
+                                            "Search 'foot' should return Sport category", data)
+                        return False
+                else:
+                    await self.log_result("search_themes", False, "Failed foot search")
                     return False
             
-            await self.log_result("chat_send", True, 
-                                f"Chat send working - Valid message sent, empty/long/self messages rejected", 
-                                {"message_length": len(message_content), "validations": "PASSED"})
+            # Test 5: Difficulty filter
+            async with self.session.get(f"{BASE_URL}/search/themes?difficulty=debutant") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    
+                    # Should return categories appropriate for debutant level
+                    if not isinstance(data, list):
+                        await self.log_result("search_themes", False, 
+                                            "Difficulty filter should return array", data)
+                        return False
+                else:
+                    await self.log_result("search_themes", False, "Failed difficulty filter")
+                    return False
+            
+            # Test 6: With user_id parameter
+            if self.test_user_id:
+                async with self.session.get(f"{BASE_URL}/search/themes?user_id={self.test_user_id}") as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        
+                        # Should include user-specific data
+                        if data and len(data) > 0:
+                            first_cat = data[0]
+                            if "user_level" not in first_cat or "user_title" not in first_cat or "is_following" not in first_cat:
+                                await self.log_result("search_themes", False, 
+                                                    "With user_id should include user-specific fields")
+                                return False
+                    else:
+                        await self.log_result("search_themes", False, "Failed user_id search")
+                        return False
+            
+            await self.log_result("search_themes", True, 
+                                "Theme search working - All query types, difficulty filter, user-specific data functional")
             return True
-                    
+            
         except Exception as e:
-            await self.log_result("chat_send", False, f"Exception: {str(e)}")
+            await self.log_result("search_themes", False, f"Exception: {str(e)}")
             return False
 
-    async def test_chat_conversations(self):
-        """Test GET /api/chat/conversations/{user_id} - List conversations."""
-        print("\n=== Testing Chat Conversations API ===")
+    async def test_search_players(self):
+        """Test GET /api/search/players - Enhanced player search."""
+        print("\n=== Testing Search Players API ===")
         
-        if not self.test_user_a_id or not self.test_user_b_id:
-            await self.log_result("chat_conversations", False, "Both test users needed for conversations testing")
+        if not self.test_user_id:
+            await self.log_result("search_players", False, "Test user needed for player search")
             return False
         
         try:
-            # Test conversations for User B (who should have received a message from User A)
-            async with self.session.get(f"{BASE_URL}/chat/conversations/{self.test_user_b_id}") as response:
+            # Test 1: Search with @pseudo (exact match)
+            async with self.session.get(f"{BASE_URL}/search/players?q=@{self.test_user_pseudo}") as response:
                 if response.status == 200:
                     data = await response.json()
                     
                     if not isinstance(data, list):
-                        await self.log_result("chat_conversations", False, 
-                                            "Conversations should return an array", data)
+                        await self.log_result("search_players", False, 
+                                            "Player search should return array", data)
                         return False
                     
-                    # Should find conversation with User A
-                    found_conversation = False
-                    for conv in data:
-                        if conv.get("partner_id") == self.test_user_a_id:
-                            found_conversation = True
-                            # Validate conversation structure
-                            required_fields = ["partner_id", "partner_pseudo", "partner_avatar_seed", 
-                                             "last_message", "last_message_time", "is_sender", "unread_count"]
-                            missing_fields = [field for field in required_fields if field not in conv]
-                            
-                            if missing_fields:
-                                await self.log_result("chat_conversations", False, 
-                                                    f"Conversation missing fields: {missing_fields}", conv)
-                                return False
-                            
-                            if conv.get("unread_count", 0) < 1:
-                                await self.log_result("chat_conversations", False, 
-                                                    "Should have unread messages from User A")
+                    # Should find exact match
+                    found_user = any(player["pseudo"] == self.test_user_pseudo for player in data)
+                    if len(data) > 0 and not found_user:
+                        await self.log_result("search_players", False, 
+                                            f"Should find exact match for @{self.test_user_pseudo}")
+                        return False
+                    
+                    # Validate player structure
+                    if data and len(data) > 0:
+                        required_fields = ["id", "pseudo", "avatar_seed", "country", 
+                                         "country_flag", "total_xp", "matches_played", 
+                                         "selected_title", "best_category", "best_level", 
+                                         "cat_level", "cat_title"]
+                        missing = [f for f in required_fields if f not in data[0]]
+                        if missing:
+                            await self.log_result("search_players", False, 
+                                                f"Player missing fields: {missing}", data[0])
+                            return False
+                else:
+                    error_data = await response.text()
+                    await self.log_result("search_players", False, 
+                                        f"HTTP {response.status}: {error_data}")
+                    return False
+            
+            # Test 2: Partial pseudo search
+            search_term = self.test_user_pseudo[:6] if len(self.test_user_pseudo) > 6 else self.test_user_pseudo[:3]
+            async with self.session.get(f"{BASE_URL}/search/players?q={search_term}") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    
+                    if not isinstance(data, list):
+                        await self.log_result("search_players", False, 
+                                            "Partial search should return array", data)
+                        return False
+                else:
+                    await self.log_result("search_players", False, "Failed partial search")
+                    return False
+            
+            # Test 3: Title filter
+            async with self.session.get(f"{BASE_URL}/search/players?title=Téléspectateur") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    
+                    if not isinstance(data, list):
+                        await self.log_result("search_players", False, 
+                                            "Title filter should return array", data)
+                        return False
+                else:
+                    await self.log_result("search_players", False, "Failed title filter")
+                    return False
+            
+            # Test 4: Category filter
+            async with self.session.get(f"{BASE_URL}/search/players?category=series_tv") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    
+                    if not isinstance(data, list):
+                        await self.log_result("search_players", False, 
+                                            "Category filter should return array", data)
+                        return False
+                else:
+                    await self.log_result("search_players", False, "Failed category filter")
+                    return False
+            
+            await self.log_result("search_players", True, 
+                                "Player search working - @pseudo exact match, partial search, title filter, category filter functional")
+            return True
+            
+        except Exception as e:
+            await self.log_result("search_players", False, f"Exception: {str(e)}")
+            return False
+
+    async def test_search_content(self):
+        """Test GET /api/search/content - Content search in wall posts and comments."""
+        print("\n=== Testing Search Content API ===")
+        
+        if not self.test_user_id:
+            await self.log_result("search_content", False, "Test user needed for content search")
+            return False
+        
+        try:
+            # Test 1: Create a wall post first
+            post_content = "Test post for search functionality - unique content for testing"
+            post_data = {
+                "user_id": self.test_user_id,
+                "content": post_content
+            }
+            
+            async with self.session.post(f"{BASE_URL}/category/series_tv/wall", json=post_data) as response:
+                if response.status == 200:
+                    post_resp = await response.json()
+                    self.wall_post_id = post_resp.get("id")
+                else:
+                    await self.log_result("search_content", False, "Failed to create test wall post")
+                    return False
+            
+            # Test 2: Add a comment to the post
+            if self.wall_post_id:
+                comment_content = "Comment for search test - unique search content"
+                comment_data = {
+                    "user_id": self.test_user_id,
+                    "content": comment_content
+                }
+                
+                async with self.session.post(f"{BASE_URL}/wall/{self.wall_post_id}/comment", json=comment_data) as response:
+                    if response.status == 200:
+                        comment_resp = await response.json()
+                        self.wall_comment_id = comment_resp.get("id")
+                    else:
+                        await self.log_result("search_content", False, "Failed to create test comment")
+                        return False
+            
+            # Test 3: Search for content
+            async with self.session.get(f"{BASE_URL}/search/content?q=search") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    
+                    # Validate response structure
+                    if not isinstance(data, dict):
+                        await self.log_result("search_content", False, 
+                                            "Content search should return object with posts and comments", data)
+                        return False
+                    
+                    if "posts" not in data or "comments" not in data:
+                        await self.log_result("search_content", False, 
+                                            "Response should contain posts and comments arrays", data)
+                        return False
+                    
+                    if not isinstance(data["posts"], list) or not isinstance(data["comments"], list):
+                        await self.log_result("search_content", False, 
+                                            "Posts and comments should be arrays", data)
+                        return False
+                    
+                    # Check if our test content was found
+                    found_post = False
+                    for post in data["posts"]:
+                        if post.get("id") == self.wall_post_id:
+                            found_post = True
+                            # Validate post structure
+                            required_fields = ["id", "category_id", "category_name", "user", 
+                                             "content", "has_image", "likes_count", 
+                                             "comments_count", "is_liked", "created_at"]
+                            missing = [f for f in required_fields if f not in post]
+                            if missing:
+                                await self.log_result("search_content", False, 
+                                                    f"Post missing fields: {missing}", post)
                                 return False
                             break
                     
-                    if not found_conversation:
-                        await self.log_result("chat_conversations", False, 
-                                            "Should find conversation with User A")
+                    found_comment = False
+                    for comment in data["comments"]:
+                        if comment.get("id") == self.wall_comment_id:
+                            found_comment = True
+                            # Validate comment structure
+                            required_fields = ["id", "post_id", "category_id", "category_name", 
+                                             "user", "content", "created_at"]
+                            missing = [f for f in required_fields if f not in comment]
+                            if missing:
+                                await self.log_result("search_content", False, 
+                                                    f"Comment missing fields: {missing}", comment)
+                                return False
+                            break
+                else:
+                    error_data = await response.text()
+                    await self.log_result("search_content", False, 
+                                        f"HTTP {response.status}: {error_data}")
+                    return False
+            
+            # Test 4: Empty query (should return empty arrays)
+            async with self.session.get(f"{BASE_URL}/search/content?q=") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    
+                    if data.get("posts") != [] or data.get("comments") != []:
+                        await self.log_result("search_content", False, 
+                                            "Empty query should return empty arrays", data)
+                        return False
+                else:
+                    await self.log_result("search_content", False, "Failed empty query test")
+                    return False
+            
+            await self.log_result("search_content", True, 
+                                f"Content search working - Found {len(data.get('posts', []))} posts, {len(data.get('comments', []))} comments, empty query handled")
+            return True
+            
+        except Exception as e:
+            await self.log_result("search_content", False, f"Exception: {str(e)}")
+            return False
+
+    async def test_search_trending(self):
+        """Test GET /api/search/trending - Trending data."""
+        print("\n=== Testing Search Trending API ===")
+        
+        try:
+            async with self.session.get(f"{BASE_URL}/search/trending") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    
+                    # Validate response structure
+                    required_keys = ["popular_categories", "trending_tags", "top_players"]
+                    missing_keys = [key for key in required_keys if key not in data]
+                    
+                    if missing_keys:
+                        await self.log_result("search_trending", False, 
+                                            f"Missing trending keys: {missing_keys}", data)
                         return False
                     
-                    await self.log_result("chat_conversations", True, 
-                                        f"Conversations API working - Found {len(data)} conversations, unread messages detected", 
-                                        {"conversations_count": len(data), "partner_found": True})
+                    # Validate popular_categories structure
+                    popular_cats = data.get("popular_categories", [])
+                    if not isinstance(popular_cats, list):
+                        await self.log_result("search_trending", False, 
+                                            "popular_categories should be an array", data)
+                        return False
+                    
+                    if popular_cats:
+                        required_cat_fields = ["id", "name", "match_count"]
+                        missing_cat_fields = [f for f in required_cat_fields if f not in popular_cats[0]]
+                        if missing_cat_fields:
+                            await self.log_result("search_trending", False, 
+                                                f"Popular category missing fields: {missing_cat_fields}", popular_cats[0])
+                            return False
+                    
+                    # Validate trending_tags structure
+                    trending_tags = data.get("trending_tags", [])
+                    if not isinstance(trending_tags, list):
+                        await self.log_result("search_trending", False, 
+                                            "trending_tags should be an array", data)
+                        return False
+                    
+                    if trending_tags:
+                        required_tag_fields = ["tag", "icon", "type"]
+                        missing_tag_fields = [f for f in required_tag_fields if f not in trending_tags[0]]
+                        if missing_tag_fields:
+                            await self.log_result("search_trending", False, 
+                                                f"Trending tag missing fields: {missing_tag_fields}", trending_tags[0])
+                            return False
+                    
+                    # Validate top_players structure
+                    top_players = data.get("top_players", [])
+                    if not isinstance(top_players, list):
+                        await self.log_result("search_trending", False, 
+                                            "top_players should be an array", data)
+                        return False
+                    
+                    if top_players:
+                        required_player_fields = ["id", "pseudo", "avatar_seed", "total_xp", "country_flag"]
+                        missing_player_fields = [f for f in required_player_fields if f not in top_players[0]]
+                        if missing_player_fields:
+                            await self.log_result("search_trending", False, 
+                                                f"Top player missing fields: {missing_player_fields}", top_players[0])
+                            return False
+                    
+                    await self.log_result("search_trending", True, 
+                                        f"Trending API working - {len(popular_cats)} popular categories, {len(trending_tags)} trending tags, {len(top_players)} top players")
                     return True
                     
                 else:
                     error_data = await response.text()
-                    await self.log_result("chat_conversations", False, 
+                    await self.log_result("search_trending", False, 
                                         f"HTTP {response.status}: {error_data}")
                     return False
                     
         except Exception as e:
-            await self.log_result("chat_conversations", False, f"Exception: {str(e)}")
-            return False
-
-    async def test_chat_messages(self):
-        """Test GET /api/chat/{user_id}/messages?with_user=X - Get messages between users."""
-        print("\n=== Testing Chat Messages API ===")
-        
-        if not self.test_user_a_id or not self.test_user_b_id:
-            await self.log_result("chat_messages", False, "Both test users needed for messages testing")
-            return False
-        
-        try:
-            # Test: User B fetches messages with User A (should auto-mark as read)
-            async with self.session.get(f"{BASE_URL}/chat/{self.test_user_b_id}/messages?with_user={self.test_user_a_id}&limit=50") as response:
-                if response.status == 200:
-                    data = await response.json()
-                    
-                    if not isinstance(data, list):
-                        await self.log_result("chat_messages", False, 
-                                            "Messages should return an array", data)
-                        return False
-                    
-                    if len(data) < 1:
-                        await self.log_result("chat_messages", False, 
-                                            "Should find at least 1 message from previous test")
-                        return False
-                    
-                    # Validate message structure
-                    for msg in data:
-                        required_fields = ["id", "sender_id", "receiver_id", "content", "read", "created_at"]
-                        missing_fields = [field for field in required_fields if field not in msg]
-                        
-                        if missing_fields:
-                            await self.log_result("chat_messages", False, 
-                                                f"Message missing fields: {missing_fields}", msg)
-                            return False
-                        
-                        # Check if message involves our test users
-                        if not ((msg["sender_id"] == self.test_user_a_id and msg["receiver_id"] == self.test_user_b_id) or 
-                               (msg["sender_id"] == self.test_user_b_id and msg["receiver_id"] == self.test_user_a_id)):
-                            await self.log_result("chat_messages", False, 
-                                                "Message should be between test users A and B")
-                            return False
-                    
-                    # Send reply from User B to User A
-                    reply_data = {
-                        "sender_id": self.test_user_b_id,
-                        "receiver_id": self.test_user_a_id,
-                        "content": "Hello back from Player B! Thanks for your message."
-                    }
-                    
-                    async with self.session.post(f"{BASE_URL}/chat/send", json=reply_data) as reply_resp:
-                        if reply_resp.status != 200:
-                            await self.log_result("chat_messages", False, 
-                                                "Failed to send reply message")
-                            return False
-                    
-                    await self.log_result("chat_messages", True, 
-                                        f"Chat messages working - Retrieved {len(data)} messages, reply sent successfully", 
-                                        {"messages_count": len(data), "reply_sent": True})
-                    return True
-                    
-                else:
-                    error_data = await response.text()
-                    await self.log_result("chat_messages", False, 
-                                        f"HTTP {response.status}: {error_data}")
-                    return False
-                    
-        except Exception as e:
-            await self.log_result("chat_messages", False, f"Exception: {str(e)}")
-            return False
-
-    async def test_chat_unread_count(self):
-        """Test GET /api/chat/unread-count/{user_id} - Total unread count."""
-        print("\n=== Testing Chat Unread Count API ===")
-        
-        if not self.test_user_a_id or not self.test_user_b_id:
-            await self.log_result("chat_unread_count", False, "Both test users needed for unread count testing")
-            return False
-        
-        try:
-            # Test 1: User B checks unread count (should be 1 after fetching messages marked them read)
-            async with self.session.get(f"{BASE_URL}/chat/unread-count/{self.test_user_b_id}") as response:
-                if response.status == 200:
-                    data = await response.json()
-                    
-                    if "unread_count" not in data:
-                        await self.log_result("chat_unread_count", False, 
-                                            "Response should contain 'unread_count' field", data)
-                        return False
-                    
-                    unread_count_b = data.get("unread_count", 0)
-                    
-                    # Test 2: User A checks unread count (should be 1 from reply)
-                    async with self.session.get(f"{BASE_URL}/chat/unread-count/{self.test_user_a_id}") as a_resp:
-                        if a_resp.status == 200:
-                            a_data = await a_resp.json()
-                            
-                            if "unread_count" not in a_data:
-                                await self.log_result("chat_unread_count", False, 
-                                                    "User A response should contain 'unread_count' field", a_data)
-                                return False
-                            
-                            unread_count_a = a_data.get("unread_count", 0)
-                            
-                            # User A should have 1 unread (reply from B)
-                            if unread_count_a < 1:
-                                await self.log_result("chat_unread_count", False, 
-                                                    f"User A should have unread messages, got {unread_count_a}")
-                                return False
-                            
-                            # Test 3: User A fetches messages (should mark as read)
-                            async with self.session.get(f"{BASE_URL}/chat/{self.test_user_a_id}/messages?with_user={self.test_user_b_id}") as fetch_resp:
-                                if fetch_resp.status == 200:
-                                    # Check unread count again
-                                    async with self.session.get(f"{BASE_URL}/chat/unread-count/{self.test_user_a_id}") as final_resp:
-                                        if final_resp.status == 200:
-                                            final_data = await final_resp.json()
-                                            final_unread = final_data.get("unread_count", 0)
-                                            
-                                            # Should be 0 now (messages marked as read)
-                                            if final_unread != 0:
-                                                await self.log_result("chat_unread_count", False, 
-                                                                    f"After fetching messages, unread should be 0, got {final_unread}")
-                                                return False
-                            
-                            await self.log_result("chat_unread_count", True, 
-                                                f"Unread count working - Initial: A={unread_count_a}, B={unread_count_b}, After read: A=0", 
-                                                {"initial_a": unread_count_a, "initial_b": unread_count_b, "final_a": 0})
-                            return True
-                        else:
-                            await self.log_result("chat_unread_count", False, 
-                                                f"User A unread check failed: {a_resp.status}")
-                            return False
-                    
-                else:
-                    error_data = await response.text()
-                    await self.log_result("chat_unread_count", False, 
-                                        f"HTTP {response.status}: {error_data}")
-                    return False
-                    
-        except Exception as e:
-            await self.log_result("chat_unread_count", False, f"Exception: {str(e)}")
+            await self.log_result("search_trending", False, f"Exception: {str(e)}")
             return False
 
     async def run_all_tests(self):
-        """Run all NEW social features backend API tests in sequence."""
-        print("🎯 Starting Duelo Backend API Testing - NEW Social Features")
+        """Run all NEW Search System API tests in sequence."""
+        print("🔍 Starting Duelo Backend API Testing - NEW Search System")
         print(f"📡 Base URL: {BASE_URL}")
-        print("🔥 Testing: Player Profiles, Follow System, Chat, Player Search")
+        print("🎯 Testing: Themes, Players, Content, Trending Search")
         print("=" * 70)
         
-        # Run tests following the review request test flow
+        # Run tests in the required sequence
         tests = [
-            ("Guest Registration A", self.test_guest_registration_a),
-            ("Guest Registration B", self.test_guest_registration_b),
-            ("Player Profile", self.test_player_profile),
-            ("Player Follow System", self.test_player_follow),
-            ("Player Search", self.test_player_search),
-            ("Chat Send Message", self.test_chat_send),
-            ("Chat Conversations", self.test_chat_conversations),
-            ("Chat Messages", self.test_chat_messages),
-            ("Chat Unread Count", self.test_chat_unread_count),
+            ("Guest Registration", self.test_guest_registration),
+            ("Search Themes", self.test_search_themes),
+            ("Search Players", self.test_search_players),
+            ("Search Content", self.test_search_content),
+            ("Search Trending", self.test_search_trending),
         ]
         
         passed_count = 0
@@ -688,22 +517,22 @@ class DueloAPITester:
         
         # Print summary
         print("\n" + "=" * 70)
-        print("🏁 NEW SOCIAL FEATURES TEST SUMMARY")
+        print("🏁 NEW SEARCH SYSTEM TEST SUMMARY")
         print("=" * 70)
         print(f"✅ Passed: {passed_count}")
         print(f"❌ Failed: {failed_count}")
         print(f"📊 Total: {passed_count + failed_count}")
         
-        if self.test_user_a_id and self.test_user_b_id:
-            print(f"👤 Test Users: {self.test_user_a_pseudo} & {self.test_user_b_pseudo}")
-            print(f"🆔 User IDs: {self.test_user_a_id} & {self.test_user_b_id}")
+        if self.test_user_id:
+            print(f"👤 Test User: {self.test_user_pseudo}")
+            print(f"🆔 User ID: {self.test_user_id}")
         
         # Return results for further processing
         return self.results
 
 async def main():
     """Main test execution."""
-    async with DueloAPITester() as tester:
+    async with DueloSearchTester() as tester:
         results = await tester.run_all_tests()
         return results
 

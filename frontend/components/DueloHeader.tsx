@@ -33,7 +33,7 @@ export default function DueloHeader() {
         style={styles.iconBtn}
         onPress={() => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          router.push('/(tabs)/players');
+          router.push('/search');
         }}
         activeOpacity={0.7}
       >
