@@ -173,3 +173,35 @@ class ChatMessage(Base):
     extra_data = Column(JSON, nullable=True)  # For image_url, game_card data, etc.
     read = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), default=utc_now)
+
+
+class Notification(Base):
+    __tablename__ = 'notifications'
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    user_id = Column(String(36), nullable=False, index=True)
+    type = Column(String(30), nullable=False, index=True)  # challenge, match_result, follow, message, like, comment, system
+    title = Column(String(200), nullable=False)
+    body = Column(Text, nullable=False)
+    icon = Column(String(10), nullable=True)  # emoji icon
+    data = Column(JSON, nullable=True)  # Deep link data: {screen, params}
+    actor_id = Column(String(36), nullable=True, index=True)  # Who triggered the notification
+    actor_pseudo = Column(String(50), nullable=True)
+    actor_avatar_seed = Column(String(50), nullable=True)
+    read = Column(Boolean, default=False, index=True)
+    created_at = Column(DateTime(timezone=True), default=utc_now)
+
+
+class NotificationSettings(Base):
+    __tablename__ = 'notification_settings'
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    user_id = Column(String(36), nullable=False, unique=True, index=True)
+    challenges = Column(Boolean, default=True)
+    match_results = Column(Boolean, default=True)
+    follows = Column(Boolean, default=True)
+    messages = Column(Boolean, default=True)
+    likes = Column(Boolean, default=True)
+    comments = Column(Boolean, default=True)
+    system = Column(Boolean, default=True)
+    updated_at = Column(DateTime(timezone=True), default=utc_now)

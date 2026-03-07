@@ -15,7 +15,7 @@ from datetime import datetime, timezone, timedelta
 from sqlalchemy import select, func, text, or_, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from database import get_db
-from models import User, Question, Match, CategoryFollow, WallPost, PostLike, PostComment, PlayerFollow, ChatMessage, generate_uuid
+from models import User, Question, Match, CategoryFollow, WallPost, PostLike, PostComment, PlayerFollow, ChatMessage, Notification, NotificationSettings, generate_uuid
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -649,6 +649,19 @@ async def submit_match(data: MatchSubmit, db: AsyncSession = Depends(get_db)):
         if level_after > level_before:
             new_level = level_after
 
+        # ── Create match result notification ──
+        cat_name = CATEGORY_MAP.get(data.category, data.category)
+        if won:
+            notif_body = f"Victoire contre {data.opponent_pseudo} en {cat_name} ! +{total_xp} XP"
+        else:
+            notif_body = f"Défaite contre {data.opponent_pseudo} en {cat_name}. +{total_xp} XP"
+        await create_notification(
+            db, data.player_id, "match_result",
+            "Résultat du match",
+            notif_body,
+            data={"screen": "results", "params": {"matchId": match.id}},
+        )
+
     await db.commit()
     await db.refresh(match)
 
@@ -1047,6 +1060,20 @@ async def toggle_like(post_id: str, data: FollowToggle, db: AsyncSession = Depen
     else:
         new_like = PostLike(user_id=data.user_id, post_id=post_id)
         db.add(new_like)
+        # Get post owner to notify
+        post_res = await db.execute(select(WallPost).where(WallPost.id == post_id))
+        post = post_res.scalar_one_or_none()
+        if post and post.user_id != data.user_id:
+            liker_res = await db.execute(select(User).where(User.id == data.user_id))
+            liker = liker_res.scalar_one_or_none()
+            liker_name = liker.pseudo if liker else "Quelqu'un"
+            await create_notification(
+                db, post.user_id, "like",
+                "Nouveau like",
+                f"{liker_name} a aimé ta publication",
+                actor_id=data.user_id,
+                data={"screen": "category-detail", "params": {"id": post.category_id}},
+            )
         await db.commit()
         return {"liked": True}
 
@@ -1059,6 +1086,22 @@ async def add_comment(post_id: str, data: CommentCreate, db: AsyncSession = Depe
 
     comment = PostComment(user_id=data.user_id, post_id=post_id, content=data.content.strip())
     db.add(comment)
+
+    # Notify post owner about the comment
+    post_res = await db.execute(select(WallPost).where(WallPost.id == post_id))
+    post = post_res.scalar_one_or_none()
+    if post and post.user_id != data.user_id:
+        commenter_res = await db.execute(select(User).where(User.id == data.user_id))
+        commenter = commenter_res.scalar_one_or_none()
+        commenter_name = commenter.pseudo if commenter else "Quelqu'un"
+        await create_notification(
+            db, post.user_id, "comment",
+            "Nouveau commentaire",
+            f"{commenter_name} a commenté ta publication",
+            actor_id=data.user_id,
+            data={"screen": "category-detail", "params": {"id": post.category_id}},
+        )
+
     await db.commit()
     await db.refresh(comment)
 
@@ -1298,6 +1341,17 @@ async def toggle_player_follow(user_id: str, data: PlayerFollowToggle, db: Async
     else:
         new_follow = PlayerFollow(follower_id=data.follower_id, followed_id=user_id)
         db.add(new_follow)
+        # Create notification for followed user
+        follower_res = await db.execute(select(User).where(User.id == data.follower_id))
+        follower_user = follower_res.scalar_one_or_none()
+        follower_name = follower_user.pseudo if follower_user else "Quelqu'un"
+        await create_notification(
+            db, user_id, "follow",
+            "Nouveau follower",
+            f"{follower_name} a commencé à te suivre",
+            actor_id=data.follower_id,
+            data={"screen": "player-profile", "params": {"id": data.follower_id}},
+        )
         await db.commit()
         return {"following": True}
 
@@ -1385,6 +1439,26 @@ async def send_message(data: ChatSend, db: AsyncSession = Depends(get_db)):
     # Get sender info
     s_res = await db.execute(select(User).where(User.id == data.sender_id))
     sender = s_res.scalar_one_or_none()
+
+    # Create notification for receiver
+    sender_name = sender.pseudo if sender else "Quelqu'un"
+    if data.message_type == "text":
+        notif_body = f"{sender_name}: {data.content[:80]}{'...' if len(data.content) > 80 else ''}"
+    elif data.message_type == "image":
+        notif_body = f"{sender_name} t'a envoyé une image"
+    elif data.message_type == "game_card":
+        notif_body = f"{sender_name} t'a envoyé un résultat de match"
+    else:
+        notif_body = f"{sender_name} t'a envoyé un message"
+
+    await create_notification(
+        db, data.receiver_id, "message",
+        "Nouveau message",
+        notif_body,
+        actor_id=data.sender_id,
+        data={"screen": "chat", "params": {"userId": data.sender_id, "pseudo": sender_name}},
+    )
+    await db.commit()
 
     return {
         "id": msg.id,
@@ -2068,6 +2142,228 @@ async def seed_questions(db: AsyncSession = Depends(get_db)):
 
     await db.commit()
     return {"imported": imported, "message": f"{imported} questions importées avec succès"}
+
+
+# ── Notifications System ──
+
+NOTIFICATION_TYPE_MAP = {
+    "challenge": {"icon": "⚔️", "priority": 1},
+    "match_result": {"icon": "🏆", "priority": 2},
+    "follow": {"icon": "👤", "priority": 3},
+    "message": {"icon": "💬", "priority": 3},
+    "like": {"icon": "❤️", "priority": 4},
+    "comment": {"icon": "💬", "priority": 4},
+    "system": {"icon": "🔔", "priority": 5},
+}
+
+
+async def create_notification(
+    db: AsyncSession,
+    user_id: str,
+    notif_type: str,
+    title: str,
+    body: str,
+    actor_id: str = None,
+    data: dict = None,
+):
+    """Create a notification for a user, respecting their settings."""
+    # Check user notification settings
+    settings_res = await db.execute(
+        select(NotificationSettings).where(NotificationSettings.user_id == user_id)
+    )
+    settings = settings_res.scalar_one_or_none()
+
+    if settings:
+        type_to_field = {
+            "challenge": "challenges",
+            "match_result": "match_results",
+            "follow": "follows",
+            "message": "messages",
+            "like": "likes",
+            "comment": "comments",
+            "system": "system",
+        }
+        field = type_to_field.get(notif_type)
+        if field and not getattr(settings, field, True):
+            return None  # User disabled this notification type
+
+    # Get actor info
+    actor_pseudo = None
+    actor_avatar_seed = None
+    if actor_id:
+        actor_res = await db.execute(select(User).where(User.id == actor_id))
+        actor = actor_res.scalar_one_or_none()
+        if actor:
+            actor_pseudo = actor.pseudo
+            actor_avatar_seed = actor.avatar_seed
+
+    icon = NOTIFICATION_TYPE_MAP.get(notif_type, {}).get("icon", "🔔")
+
+    notif = Notification(
+        user_id=user_id,
+        type=notif_type,
+        title=title,
+        body=body,
+        icon=icon,
+        data=data,
+        actor_id=actor_id,
+        actor_pseudo=actor_pseudo,
+        actor_avatar_seed=actor_avatar_seed,
+    )
+    db.add(notif)
+    return notif
+
+
+class NotifReadRequest(BaseModel):
+    user_id: str
+
+class NotifSettingsUpdate(BaseModel):
+    user_id: str
+    challenges: Optional[bool] = None
+    match_results: Optional[bool] = None
+    follows: Optional[bool] = None
+    messages: Optional[bool] = None
+    likes: Optional[bool] = None
+    comments: Optional[bool] = None
+    system: Optional[bool] = None
+
+
+@api_router.get("/notifications/{user_id}")
+async def get_notifications(user_id: str, limit: int = 50, offset: int = 0, db: AsyncSession = Depends(get_db)):
+    """Get all notifications for a user, newest first."""
+    result = await db.execute(
+        select(Notification)
+        .where(Notification.user_id == user_id)
+        .order_by(Notification.created_at.desc())
+        .limit(limit).offset(offset)
+    )
+    notifications = result.scalars().all()
+
+    return [{
+        "id": n.id,
+        "type": n.type,
+        "title": n.title,
+        "body": n.body,
+        "icon": n.icon,
+        "data": n.data,
+        "actor_id": n.actor_id,
+        "actor_pseudo": n.actor_pseudo,
+        "actor_avatar_seed": n.actor_avatar_seed,
+        "read": n.read,
+        "created_at": n.created_at.isoformat(),
+    } for n in notifications]
+
+
+@api_router.get("/notifications/{user_id}/unread-count")
+async def get_notification_unread_count(user_id: str, db: AsyncSession = Depends(get_db)):
+    """Get unread notification count."""
+    result = await db.execute(
+        select(func.count(Notification.id)).where(
+            Notification.user_id == user_id,
+            Notification.read == False,
+        )
+    )
+    return {"unread_count": result.scalar() or 0}
+
+
+@api_router.post("/notifications/{notification_id}/read")
+async def mark_notification_read(notification_id: str, data: NotifReadRequest, db: AsyncSession = Depends(get_db)):
+    """Mark a single notification as read."""
+    result = await db.execute(
+        select(Notification).where(
+            Notification.id == notification_id,
+            Notification.user_id == data.user_id,
+        )
+    )
+    notif = result.scalar_one_or_none()
+    if not notif:
+        raise HTTPException(status_code=404, detail="Notification non trouvée")
+
+    notif.read = True
+    await db.commit()
+    return {"success": True}
+
+
+@api_router.post("/notifications/read-all")
+async def mark_all_notifications_read(data: NotifReadRequest, db: AsyncSession = Depends(get_db)):
+    """Mark all notifications as read for a user."""
+    await db.execute(
+        text("UPDATE notifications SET read = true WHERE user_id = :user_id AND read = false"),
+        {"user_id": data.user_id}
+    )
+    await db.commit()
+    return {"success": True}
+
+
+@api_router.get("/notifications/{user_id}/settings")
+async def get_notification_settings(user_id: str, db: AsyncSession = Depends(get_db)):
+    """Get notification preferences for a user."""
+    result = await db.execute(
+        select(NotificationSettings).where(NotificationSettings.user_id == user_id)
+    )
+    settings = result.scalar_one_or_none()
+
+    if not settings:
+        # Return defaults
+        return {
+            "challenges": True,
+            "match_results": True,
+            "follows": True,
+            "messages": True,
+            "likes": True,
+            "comments": True,
+            "system": True,
+        }
+
+    return {
+        "challenges": settings.challenges,
+        "match_results": settings.match_results,
+        "follows": settings.follows,
+        "messages": settings.messages,
+        "likes": settings.likes,
+        "comments": settings.comments,
+        "system": settings.system,
+    }
+
+
+@api_router.post("/notifications/{user_id}/settings")
+async def update_notification_settings(user_id: str, data: NotifSettingsUpdate, db: AsyncSession = Depends(get_db)):
+    """Update notification preferences."""
+    result = await db.execute(
+        select(NotificationSettings).where(NotificationSettings.user_id == user_id)
+    )
+    settings = result.scalar_one_or_none()
+
+    if not settings:
+        settings = NotificationSettings(user_id=user_id)
+        db.add(settings)
+
+    # Update only provided fields
+    if data.challenges is not None:
+        settings.challenges = data.challenges
+    if data.match_results is not None:
+        settings.match_results = data.match_results
+    if data.follows is not None:
+        settings.follows = data.follows
+    if data.messages is not None:
+        settings.messages = data.messages
+    if data.likes is not None:
+        settings.likes = data.likes
+    if data.comments is not None:
+        settings.comments = data.comments
+    if data.system is not None:
+        settings.system = data.system
+
+    await db.commit()
+    return {
+        "challenges": settings.challenges,
+        "match_results": settings.match_results,
+        "follows": settings.follows,
+        "messages": settings.messages,
+        "likes": settings.likes,
+        "comments": settings.comments,
+        "system": settings.system,
+    }
 
 
 # ── Health ──

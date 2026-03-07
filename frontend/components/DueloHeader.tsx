@@ -9,10 +9,15 @@ const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 export default function DueloHeader() {
   const router = useRouter();
   const [unreadCount, setUnreadCount] = useState(0);
+  const [notifCount, setNotifCount] = useState(0);
 
   useEffect(() => {
     fetchUnread();
-    const interval = setInterval(fetchUnread, 15000);
+    fetchNotifCount();
+    const interval = setInterval(() => {
+      fetchUnread();
+      fetchNotifCount();
+    }, 15000);
     return () => clearInterval(interval);
   }, []);
 
@@ -23,6 +28,16 @@ export default function DueloHeader() {
       const res = await fetch(`${API_URL}/api/chat/unread-count/${userId}`);
       const data = await res.json();
       setUnreadCount(data.unread_count || 0);
+    } catch {}
+  };
+
+  const fetchNotifCount = async () => {
+    const userId = await AsyncStorage.getItem('duelo_user_id');
+    if (!userId) return;
+    try {
+      const res = await fetch(`${API_URL}/api/notifications/${userId}/unread-count`);
+      const data = await res.json();
+      setNotifCount(data.unread_count || 0);
     } catch {}
   };
 
@@ -64,10 +79,16 @@ export default function DueloHeader() {
           style={styles.iconBtn}
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            router.push('/notifications');
           }}
           activeOpacity={0.7}
         >
           <Text style={styles.icon}>🔔</Text>
+          {notifCount > 0 && (
+            <View style={styles.notifBadge}>
+              <Text style={styles.badgeText}>{notifCount > 9 ? '9+' : notifCount}</Text>
+            </View>
+          )}
         </TouchableOpacity>
       </View>
     </View>
@@ -120,5 +141,17 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 10,
     fontWeight: '800',
+  },
+  notifBadge: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#FF6B35',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
   },
 });

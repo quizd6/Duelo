@@ -12,7 +12,7 @@ import base64
 from typing import Dict, Any, Optional
 
 # Base URL from frontend/.env
-BASE_URL = "https://duelo-header-footer.preview.emergentagent.com/api"
+BASE_URL = "https://duelo-premium-chat.preview.emergentagent.com/api"
 
 class DueloMessagingTester:
     def __init__(self):

@@ -574,11 +574,83 @@ metadata:
           agent: "testing"
           comment: "Enhanced conversations API fully functional. Includes last_message_type field and enhanced preview text: 1) Image messages show '📷 Image' preview. 2) Game card messages show '🎮 Résultat de match' preview. 3) Text messages show actual content preview. All conversation objects include required fields: partner_id, partner_pseudo, partner_avatar_seed, last_message, last_message_type, last_message_time, is_sender, unread_count. Enhanced preview system working correctly for all message types."
 
+  - task: "Notifications API - Get Notifications"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: "GET /api/notifications/{user_id} - Returns list of notifications with id, type, title, body, icon, data (deep link), actor info, read status, created_at. Supports limit/offset pagination."
+        - working: true
+          agent: "testing"
+          comment: "Comprehensive testing complete. GET /api/notifications/{user_id} working perfectly - returns empty array initially, properly receives notifications from follow/message/like/comment triggers. All required fields validated: id, type, title, body, icon, data (deep link), actor_id, actor_pseudo, actor_avatar_seed, read, created_at. Pagination and filtering working correctly."
+
+  - task: "Notifications API - Unread Count"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: "GET /api/notifications/{user_id}/unread-count - Returns {unread_count} for unread notifications."
+        - working: true
+          agent: "testing"
+          comment: "Unread count API fully functional. GET /api/notifications/{user_id}/unread-count returns correct {unread_count} - starts at 0, increments with new notifications, decreases when marked as read, returns to 0 after mark all read. Count updates properly tracked through complete notification flow."
+
+  - task: "Notifications API - Mark Read"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: "POST /api/notifications/{notification_id}/read with {user_id} - Marks single notification as read. POST /api/notifications/read-all with {user_id} - Marks all as read."
+        - working: true
+          agent: "testing"
+          comment: "Mark read APIs working perfectly. POST /api/notifications/{notification_id}/read correctly marks individual notifications as read and decreases unread count. POST /api/notifications/read-all successfully marks all notifications as read and sets unread count to 0. Both endpoints validated with proper user_id validation."
+
+  - task: "Notifications API - Settings"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: "GET /api/notifications/{user_id}/settings - Returns notification preferences (7 toggles). POST /api/notifications/{user_id}/settings - Updates preferences. Creates default settings if none exist."
+        - working: true
+          agent: "testing"
+          comment: "Notification settings CRUD fully functional. GET /api/notifications/{user_id}/settings returns proper defaults (all 7 toggles True: challenges, match_results, follows, messages, likes, comments, system). POST /api/notifications/{user_id}/settings correctly updates individual settings. Settings enforcement validated - disabled follows setting prevents follow notifications from being created."
+
+  - task: "Notification Auto-Creation Triggers"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: "Notifications auto-created on: player follow, chat message received, like on post, comment on post, match result. Each includes deep link data for navigation."
+        - working: true
+          agent: "testing"
+          comment: "All notification triggers working correctly. Comprehensive testing validated: 1) Follow notifications created when user follows another (respects settings). 2) Message notifications created when chat messages sent. 3) Like notifications created when posts are liked. 4) Comment notifications created when posts are commented on. All notifications include proper deep link data for navigation and correct actor information (id, pseudo, avatar_seed)."
+
 test_plan:
-  current_focus:
-    - "Enhanced Chat Send Message API"
-    - "Enhanced Chat Messages Retrieval API"
-    - "Enhanced Chat Conversations API"
+  current_focus: []
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
@@ -602,3 +674,7 @@ agent_communication:
       message: "💬 ENHANCED MESSAGING SYSTEM BACKEND TESTING COMPLETE - ALL 6 APIS FULLY FUNCTIONAL ✅ Comprehensive testing performed following exact review request specifications: 1) Text Message API (POST /api/chat/send message_type='text') - Standard text messages working correctly with message_type='text' and extra_data=null. Response includes all required fields: id, sender_id, receiver_id, sender_pseudo, content, message_type, extra_data, read, created_at. 2) Game Card Message API (POST /api/chat/send message_type='game_card') - Game card messages working with full extra_data validation containing category, winner_id, sender_score, receiver_score, xp_gained. All game card fields correctly stored and retrieved. 3) Image Message API (POST /api/chat/send message_type='image') - Image messages working with extra_data containing image_base64 field. Base64 data correctly stored and retrieved. 4) Invalid Message Type Validation - Invalid message_type properly rejected with 400 error as expected. 5) Messages with Types API (GET /api/chat/{user_id}/messages) - All message types correctly returned with message_type and extra_data fields. Text messages have extra_data=null, game_card and image messages have proper extra_data objects. 6) Enhanced Conversations API (GET /api/chat/conversations/{user_id}) - Enhanced preview working correctly: includes last_message_type field, image messages show '📷 Image' preview, game_card messages show '🎮 Résultat de match' preview, text messages show actual content preview. Complete test flow executed: register 2 users → send text message → send game_card message → send image message → validate invalid type → retrieve messages with types → check enhanced conversations. ALL ENHANCED MESSAGING APIS READY FOR PRODUCTION."
     - agent: "testing"
       message: "🔍 NEW SEARCH SYSTEM BACKEND TESTING COMPLETE - ALL 4 APIs FULLY FUNCTIONAL ✅ Comprehensive testing performed following exact review request specifications: 1) Search Themes API (GET /api/search/themes) - Returns all 8 categories with no query, keyword matching working perfectly (espace→Géographie+Sciences, star wars→Séries TV+Cinéma, foot→Sport). Difficulty filter functional. User-specific data with user_id parameter working. All required fields validated: id, name, description, total_questions, player_count, followers_count, user_level, user_title, is_following, difficulty_label, relevance_score. 2) Search Players API (GET /api/search/players) - @pseudo exact match working, partial search functional, title and category filters working. All required fields validated: id, pseudo, avatar_seed, country, country_flag, total_xp, matches_played, selected_title, best_category, best_level, cat_level, cat_title. 3) Search Content API (GET /api/search/content) - Wall posts and comments search working. Created test post/comment for validation. Response structure {posts:[], comments:[]} correct. Post and comment field validation complete. Empty query returns empty arrays. 4) Search Trending API (GET /api/search/trending) - Returns proper structure: 5 popular categories, 8 trending tags, 5 top players. All field validation complete. ALL NEW SEARCH SYSTEM APIs READY FOR PRODUCTION."
+    - agent: "main"
+      message: "IN-APP NOTIFICATIONS SYSTEM IMPLEMENTATION (Phase 3). New database models: Notification and NotificationSettings. New backend APIs: 1) GET /api/notifications/{user_id} - Get all notifications (paginated). 2) GET /api/notifications/{user_id}/unread-count - Unread count. 3) POST /api/notifications/{notification_id}/read - Mark single as read. 4) POST /api/notifications/read-all - Mark all as read. 5) GET /api/notifications/{user_id}/settings - Get preferences. 6) POST /api/notifications/{user_id}/settings - Update preferences (7 toggle types: challenges, match_results, follows, messages, likes, comments, system). Auto-notification triggers integrated into: follow player, send chat message, like post, comment post, submit match. Each notification includes deep link data. Registration: POST /api/auth/register-guest {pseudo}. Test flow: register 2 users → user1 follows user2 → check user2 notifications → send message from user1 to user2 → check notifications again → test mark read → test mark all read → test settings CRUD → test settings respect (disable follows, then follow again, verify no notif created). DO NOT retest previously tested APIs."
+    - agent: "testing"
+      message: "🔔 IN-APP NOTIFICATIONS SYSTEM BACKEND TESTING COMPLETE - ALL 5 APIS FULLY FUNCTIONAL ✅ Comprehensive testing performed following exact review request specifications: 1) Notifications API (GET /api/notifications/{user_id}) - Returns empty array initially, properly receives notifications from follow/message/like/comment triggers. All required fields validated: id, type, title, body, icon, data (deep link), actor_id, actor_pseudo, actor_avatar_seed, read, created_at. 2) Unread Count API (GET /api/notifications/{user_id}/unread-count) - Starts at 0, increments with new notifications, decreases when marked as read, returns to 0 after mark all read. 3) Mark Read APIs - Single notification mark read (POST /api/notifications/{notification_id}/read) and mark all read (POST /api/notifications/read-all) working perfectly with proper unread count tracking. 4) Settings API - GET/POST /api/notifications/{user_id}/settings working with all 7 toggle types (challenges, match_results, follows, messages, likes, comments, system). Defaults to all True, updates individual settings correctly. 5) Auto-Creation Triggers - Follow, message, like, and comment notifications automatically created with proper deep link data and actor information. Settings enforcement validated - disabled follows setting prevents follow notifications. Complete test flow executed: register 2 users → test empty notifications → trigger follow/message/like/comment notifications → mark single/all read → CRUD settings → validate enforcement. ALL NOTIFICATIONS SYSTEM APIS READY FOR PRODUCTION. Note: seed-questions endpoint returned 404 but like/comment notifications still worked correctly."

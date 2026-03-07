@@ -1,540 +1,496 @@
 #!/usr/bin/env python3
-"""
-Comprehensive backend testing for Duelo quiz app - NEW Search System Testing.
-Tests the 4 new search endpoints: themes, players, content, and trending.
-"""
 
 import asyncio
-import aiohttp
+import httpx
 import json
-import time
-import random
-from typing import Dict, Any, Optional
+from datetime import datetime
 
-# Base URL from frontend/.env
-BASE_URL = "https://duelo-header-footer.preview.emergentagent.com/api"
+# Backend URL configuration
+BACKEND_URL = "https://duelo-premium-chat.preview.emergentagent.com/api"
 
-class DueloSearchTester:
+class NotificationsTestSuite:
     def __init__(self):
-        self.session = None
-        self.test_user_id = None
-        self.test_user_pseudo = None
-        self.wall_post_id = None
-        self.wall_comment_id = None
-        self.results = {
-            "guest_registration": {"status": "pending", "details": None},
-            "search_themes": {"status": "pending", "details": None},
-            "search_players": {"status": "pending", "details": None},
-            "search_content": {"status": "pending", "details": None},
-            "search_trending": {"status": "pending", "details": None}
-        }
-
-    async def __aenter__(self):
-        self.session = aiohttp.ClientSession()
-        return self
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        if self.session:
-            await self.session.close()
-
-    async def log_result(self, test_name: str, success: bool, details: str, data: Any = None):
-        """Log test result with detailed information."""
-        self.results[test_name] = {
-            "status": "passed" if success else "failed",
+        self.client = httpx.AsyncClient(timeout=30.0)
+        self.user1_id = None
+        self.user2_id = None
+        self.test_results = []
+        
+    async def log_result(self, test_name, success, details=""):
+        """Log test results"""
+        status = "✅ PASS" if success else "❌ FAIL"
+        result = {
+            "test": test_name,
+            "status": status,
             "details": details,
-            "data": data
+            "timestamp": datetime.now().isoformat()
         }
-        status_icon = "✅" if success else "❌"
-        print(f"{status_icon} {test_name}: {details}")
-        if data and not success:
-            print(f"   Response data: {json.dumps(data, indent=2)}")
+        self.test_results.append(result)
+        print(f"{status}: {test_name}")
+        if details:
+            print(f"  Details: {details}")
+        print()
 
-    async def test_guest_registration(self):
-        """Register a test user for search testing."""
-        print("\n=== Testing Guest Registration ===")
-        
-        timestamp = str(int(time.time()))[-4:]
-        pseudo = f"SearchTester_{timestamp}"
-        
+    async def register_guest_user(self, pseudo):
+        """Register a guest user and return user ID"""
         try:
-            async with self.session.post(f"{BASE_URL}/auth/register-guest", 
-                                       json={"pseudo": pseudo}) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    self.test_user_id = data.get("id")
-                    self.test_user_pseudo = data.get("pseudo")
-                    
-                    await self.log_result("guest_registration", True, 
-                                        f"Created test user: {pseudo} (ID: {self.test_user_id})", data)
-                    return True
-                else:
-                    error_data = await response.text()
-                    await self.log_result("guest_registration", False, 
-                                        f"HTTP {response.status}: {error_data}")
-                    return False
-                    
+            response = await self.client.post(
+                f"{BACKEND_URL}/auth/register-guest",
+                json={"pseudo": pseudo}
+            )
+            if response.status_code == 200:
+                user_data = response.json()
+                return user_data["id"]
+            else:
+                await self.log_result(f"Register {pseudo}", False, f"Status: {response.status_code}, Response: {response.text}")
+                return None
         except Exception as e:
-            await self.log_result("guest_registration", False, f"Exception: {str(e)}")
-            return False
+            await self.log_result(f"Register {pseudo}", False, f"Exception: {str(e)}")
+            return None
 
-    async def test_search_themes(self):
-        """Test GET /api/search/themes - Theme search by keyword with tag matching."""
-        print("\n=== Testing Search Themes API ===")
+    async def test_1_user_registration(self):
+        """Test 1: Register 2 guest users"""
+        print("=== Test 1: User Registration ===")
+        
+        self.user1_id = await self.register_guest_user("notif_user1")
+        if self.user1_id:
+            await self.log_result("Register user1 (notif_user1)", True, f"User ID: {self.user1_id}")
+        
+        self.user2_id = await self.register_guest_user("notif_user2")  
+        if self.user2_id:
+            await self.log_result("Register user2 (notif_user2)", True, f"User ID: {self.user2_id}")
+
+        return self.user1_id and self.user2_id
+
+    async def test_2_empty_notifications(self):
+        """Test 2: Check empty notifications initially"""
+        print("=== Test 2: Empty Notifications Initially ===")
         
         try:
-            # Test 1: No query (should return all 8 categories)
-            async with self.session.get(f"{BASE_URL}/search/themes") as response:
-                if response.status == 200:
-                    data = await response.json()
-                    
-                    if not isinstance(data, list):
-                        await self.log_result("search_themes", False, 
-                                            "Response should be an array", data)
-                        return False
-                    
-                    if len(data) != 8:
-                        await self.log_result("search_themes", False, 
-                                            f"Should return all 8 categories, got {len(data)}", data)
-                        return False
-                    
-                    # Validate structure of first category
-                    required_fields = ["id", "name", "description", "total_questions", 
-                                     "player_count", "followers_count", "user_level", 
-                                     "user_title", "is_following", "difficulty_label", "relevance_score"]
-                    missing_fields = [field for field in required_fields if field not in data[0]]
-                    
-                    if missing_fields:
-                        await self.log_result("search_themes", False, 
-                                            f"Missing theme fields: {missing_fields}", data[0])
-                        return False
+            # Test notifications list for user1
+            response = await self.client.get(f"{BACKEND_URL}/notifications/{self.user1_id}")
+            if response.status_code == 200:
+                notifications = response.json()
+                if len(notifications) == 0:
+                    await self.log_result("User1 notifications empty initially", True, "Empty array returned")
                 else:
-                    error_data = await response.text()
-                    await self.log_result("search_themes", False, 
-                                        f"HTTP {response.status}: {error_data}")
-                    return False
-            
-            # Test 2: Search with q=espace (should return Géographie and Sciences)
-            async with self.session.get(f"{BASE_URL}/search/themes?q=espace") as response:
-                if response.status == 200:
-                    data = await response.json()
-                    
-                    # Should find categories with space/geography/sciences tags
-                    found_geo = any(cat["id"] == "geographie" for cat in data)
-                    found_sci = any(cat["id"] == "sciences" for cat in data)
-                    
-                    if not (found_geo or found_sci):
-                        await self.log_result("search_themes", False, 
-                                            "Search 'espace' should return Géographie or Sciences", data)
-                        return False
-                else:
-                    await self.log_result("search_themes", False, "Failed espace search")
-                    return False
-            
-            # Test 3: Search with q=star+wars (should return Séries TV and Cinéma)
-            async with self.session.get(f"{BASE_URL}/search/themes?q=star%20wars") as response:
-                if response.status == 200:
-                    data = await response.json()
-                    
-                    found_series = any(cat["id"] == "series_tv" for cat in data)
-                    found_cinema = any(cat["id"] == "cinema" for cat in data)
-                    
-                    if not (found_series or found_cinema):
-                        await self.log_result("search_themes", False, 
-                                            "Search 'star wars' should return Séries TV or Cinéma", data)
-                        return False
-                else:
-                    await self.log_result("search_themes", False, "Failed star wars search")
-                    return False
-            
-            # Test 4: Search with q=foot (should return Sport)
-            async with self.session.get(f"{BASE_URL}/search/themes?q=foot") as response:
-                if response.status == 200:
-                    data = await response.json()
-                    
-                    found_sport = any(cat["id"] == "sport" for cat in data)
-                    
-                    if not found_sport:
-                        await self.log_result("search_themes", False, 
-                                            "Search 'foot' should return Sport category", data)
-                        return False
-                else:
-                    await self.log_result("search_themes", False, "Failed foot search")
-                    return False
-            
-            # Test 5: Difficulty filter
-            async with self.session.get(f"{BASE_URL}/search/themes?difficulty=debutant") as response:
-                if response.status == 200:
-                    data = await response.json()
-                    
-                    # Should return categories appropriate for debutant level
-                    if not isinstance(data, list):
-                        await self.log_result("search_themes", False, 
-                                            "Difficulty filter should return array", data)
-                        return False
-                else:
-                    await self.log_result("search_themes", False, "Failed difficulty filter")
-                    return False
-            
-            # Test 6: With user_id parameter
-            if self.test_user_id:
-                async with self.session.get(f"{BASE_URL}/search/themes?user_id={self.test_user_id}") as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        
-                        # Should include user-specific data
-                        if data and len(data) > 0:
-                            first_cat = data[0]
-                            if "user_level" not in first_cat or "user_title" not in first_cat or "is_following" not in first_cat:
-                                await self.log_result("search_themes", False, 
-                                                    "With user_id should include user-specific fields")
-                                return False
-                    else:
-                        await self.log_result("search_themes", False, "Failed user_id search")
-                        return False
-            
-            await self.log_result("search_themes", True, 
-                                "Theme search working - All query types, difficulty filter, user-specific data functional")
-            return True
-            
-        except Exception as e:
-            await self.log_result("search_themes", False, f"Exception: {str(e)}")
-            return False
+                    await self.log_result("User1 notifications empty initially", False, f"Expected empty, got {len(notifications)} notifications")
+            else:
+                await self.log_result("User1 notifications empty initially", False, f"Status: {response.status_code}")
 
-    async def test_search_players(self):
-        """Test GET /api/search/players - Enhanced player search."""
-        print("\n=== Testing Search Players API ===")
-        
-        if not self.test_user_id:
-            await self.log_result("search_players", False, "Test user needed for player search")
-            return False
-        
-        try:
-            # Test 1: Search with @pseudo (exact match)
-            async with self.session.get(f"{BASE_URL}/search/players?q=@{self.test_user_pseudo}") as response:
-                if response.status == 200:
-                    data = await response.json()
-                    
-                    if not isinstance(data, list):
-                        await self.log_result("search_players", False, 
-                                            "Player search should return array", data)
-                        return False
-                    
-                    # Should find exact match
-                    found_user = any(player["pseudo"] == self.test_user_pseudo for player in data)
-                    if len(data) > 0 and not found_user:
-                        await self.log_result("search_players", False, 
-                                            f"Should find exact match for @{self.test_user_pseudo}")
-                        return False
-                    
-                    # Validate player structure
-                    if data and len(data) > 0:
-                        required_fields = ["id", "pseudo", "avatar_seed", "country", 
-                                         "country_flag", "total_xp", "matches_played", 
-                                         "selected_title", "best_category", "best_level", 
-                                         "cat_level", "cat_title"]
-                        missing = [f for f in required_fields if f not in data[0]]
-                        if missing:
-                            await self.log_result("search_players", False, 
-                                                f"Player missing fields: {missing}", data[0])
-                            return False
+            # Test unread count for user1
+            response = await self.client.get(f"{BACKEND_URL}/notifications/{self.user1_id}/unread-count")
+            if response.status_code == 200:
+                count_data = response.json()
+                if count_data.get("unread_count") == 0:
+                    await self.log_result("User1 unread count initially zero", True, "Unread count: 0")
                 else:
-                    error_data = await response.text()
-                    await self.log_result("search_players", False, 
-                                        f"HTTP {response.status}: {error_data}")
-                    return False
-            
-            # Test 2: Partial pseudo search
-            search_term = self.test_user_pseudo[:6] if len(self.test_user_pseudo) > 6 else self.test_user_pseudo[:3]
-            async with self.session.get(f"{BASE_URL}/search/players?q={search_term}") as response:
-                if response.status == 200:
-                    data = await response.json()
-                    
-                    if not isinstance(data, list):
-                        await self.log_result("search_players", False, 
-                                            "Partial search should return array", data)
-                        return False
-                else:
-                    await self.log_result("search_players", False, "Failed partial search")
-                    return False
-            
-            # Test 3: Title filter
-            async with self.session.get(f"{BASE_URL}/search/players?title=Téléspectateur") as response:
-                if response.status == 200:
-                    data = await response.json()
-                    
-                    if not isinstance(data, list):
-                        await self.log_result("search_players", False, 
-                                            "Title filter should return array", data)
-                        return False
-                else:
-                    await self.log_result("search_players", False, "Failed title filter")
-                    return False
-            
-            # Test 4: Category filter
-            async with self.session.get(f"{BASE_URL}/search/players?category=series_tv") as response:
-                if response.status == 200:
-                    data = await response.json()
-                    
-                    if not isinstance(data, list):
-                        await self.log_result("search_players", False, 
-                                            "Category filter should return array", data)
-                        return False
-                else:
-                    await self.log_result("search_players", False, "Failed category filter")
-                    return False
-            
-            await self.log_result("search_players", True, 
-                                "Player search working - @pseudo exact match, partial search, title filter, category filter functional")
-            return True
-            
-        except Exception as e:
-            await self.log_result("search_players", False, f"Exception: {str(e)}")
-            return False
-
-    async def test_search_content(self):
-        """Test GET /api/search/content - Content search in wall posts and comments."""
-        print("\n=== Testing Search Content API ===")
-        
-        if not self.test_user_id:
-            await self.log_result("search_content", False, "Test user needed for content search")
-            return False
-        
-        try:
-            # Test 1: Create a wall post first
-            post_content = "Test post for search functionality - unique content for testing"
-            post_data = {
-                "user_id": self.test_user_id,
-                "content": post_content
-            }
-            
-            async with self.session.post(f"{BASE_URL}/category/series_tv/wall", json=post_data) as response:
-                if response.status == 200:
-                    post_resp = await response.json()
-                    self.wall_post_id = post_resp.get("id")
-                else:
-                    await self.log_result("search_content", False, "Failed to create test wall post")
-                    return False
-            
-            # Test 2: Add a comment to the post
-            if self.wall_post_id:
-                comment_content = "Comment for search test - unique search content"
-                comment_data = {
-                    "user_id": self.test_user_id,
-                    "content": comment_content
-                }
+                    await self.log_result("User1 unread count initially zero", False, f"Expected 0, got {count_data.get('unread_count')}")
+            else:
+                await self.log_result("User1 unread count initially zero", False, f"Status: {response.status_code}")
                 
-                async with self.session.post(f"{BASE_URL}/wall/{self.wall_post_id}/comment", json=comment_data) as response:
-                    if response.status == 200:
-                        comment_resp = await response.json()
-                        self.wall_comment_id = comment_resp.get("id")
-                    else:
-                        await self.log_result("search_content", False, "Failed to create test comment")
-                        return False
-            
-            # Test 3: Search for content
-            async with self.session.get(f"{BASE_URL}/search/content?q=search") as response:
-                if response.status == 200:
-                    data = await response.json()
-                    
-                    # Validate response structure
-                    if not isinstance(data, dict):
-                        await self.log_result("search_content", False, 
-                                            "Content search should return object with posts and comments", data)
-                        return False
-                    
-                    if "posts" not in data or "comments" not in data:
-                        await self.log_result("search_content", False, 
-                                            "Response should contain posts and comments arrays", data)
-                        return False
-                    
-                    if not isinstance(data["posts"], list) or not isinstance(data["comments"], list):
-                        await self.log_result("search_content", False, 
-                                            "Posts and comments should be arrays", data)
-                        return False
-                    
-                    # Check if our test content was found
-                    found_post = False
-                    for post in data["posts"]:
-                        if post.get("id") == self.wall_post_id:
-                            found_post = True
-                            # Validate post structure
-                            required_fields = ["id", "category_id", "category_name", "user", 
-                                             "content", "has_image", "likes_count", 
-                                             "comments_count", "is_liked", "created_at"]
-                            missing = [f for f in required_fields if f not in post]
-                            if missing:
-                                await self.log_result("search_content", False, 
-                                                    f"Post missing fields: {missing}", post)
-                                return False
-                            break
-                    
-                    found_comment = False
-                    for comment in data["comments"]:
-                        if comment.get("id") == self.wall_comment_id:
-                            found_comment = True
-                            # Validate comment structure
-                            required_fields = ["id", "post_id", "category_id", "category_name", 
-                                             "user", "content", "created_at"]
-                            missing = [f for f in required_fields if f not in comment]
-                            if missing:
-                                await self.log_result("search_content", False, 
-                                                    f"Comment missing fields: {missing}", comment)
-                                return False
-                            break
-                else:
-                    error_data = await response.text()
-                    await self.log_result("search_content", False, 
-                                        f"HTTP {response.status}: {error_data}")
-                    return False
-            
-            # Test 4: Empty query (should return empty arrays)
-            async with self.session.get(f"{BASE_URL}/search/content?q=") as response:
-                if response.status == 200:
-                    data = await response.json()
-                    
-                    if data.get("posts") != [] or data.get("comments") != []:
-                        await self.log_result("search_content", False, 
-                                            "Empty query should return empty arrays", data)
-                        return False
-                else:
-                    await self.log_result("search_content", False, "Failed empty query test")
-                    return False
-            
-            await self.log_result("search_content", True, 
-                                f"Content search working - Found {len(data.get('posts', []))} posts, {len(data.get('comments', []))} comments, empty query handled")
-            return True
-            
         except Exception as e:
-            await self.log_result("search_content", False, f"Exception: {str(e)}")
-            return False
+            await self.log_result("Empty notifications test", False, f"Exception: {str(e)}")
 
-    async def test_search_trending(self):
-        """Test GET /api/search/trending - Trending data."""
-        print("\n=== Testing Search Trending API ===")
+    async def test_3_follow_notification(self):
+        """Test 3: Trigger follow notification"""
+        print("=== Test 3: Follow Notification ===")
         
         try:
-            async with self.session.get(f"{BASE_URL}/search/trending") as response:
-                if response.status == 200:
-                    data = await response.json()
-                    
-                    # Validate response structure
-                    required_keys = ["popular_categories", "trending_tags", "top_players"]
-                    missing_keys = [key for key in required_keys if key not in data]
-                    
-                    if missing_keys:
-                        await self.log_result("search_trending", False, 
-                                            f"Missing trending keys: {missing_keys}", data)
-                        return False
-                    
-                    # Validate popular_categories structure
-                    popular_cats = data.get("popular_categories", [])
-                    if not isinstance(popular_cats, list):
-                        await self.log_result("search_trending", False, 
-                                            "popular_categories should be an array", data)
-                        return False
-                    
-                    if popular_cats:
-                        required_cat_fields = ["id", "name", "match_count"]
-                        missing_cat_fields = [f for f in required_cat_fields if f not in popular_cats[0]]
-                        if missing_cat_fields:
-                            await self.log_result("search_trending", False, 
-                                                f"Popular category missing fields: {missing_cat_fields}", popular_cats[0])
-                            return False
-                    
-                    # Validate trending_tags structure
-                    trending_tags = data.get("trending_tags", [])
-                    if not isinstance(trending_tags, list):
-                        await self.log_result("search_trending", False, 
-                                            "trending_tags should be an array", data)
-                        return False
-                    
-                    if trending_tags:
-                        required_tag_fields = ["tag", "icon", "type"]
-                        missing_tag_fields = [f for f in required_tag_fields if f not in trending_tags[0]]
-                        if missing_tag_fields:
-                            await self.log_result("search_trending", False, 
-                                                f"Trending tag missing fields: {missing_tag_fields}", trending_tags[0])
-                            return False
-                    
-                    # Validate top_players structure
-                    top_players = data.get("top_players", [])
-                    if not isinstance(top_players, list):
-                        await self.log_result("search_trending", False, 
-                                            "top_players should be an array", data)
-                        return False
-                    
-                    if top_players:
-                        required_player_fields = ["id", "pseudo", "avatar_seed", "total_xp", "country_flag"]
-                        missing_player_fields = [f for f in required_player_fields if f not in top_players[0]]
-                        if missing_player_fields:
-                            await self.log_result("search_trending", False, 
-                                                f"Top player missing fields: {missing_player_fields}", top_players[0])
-                            return False
-                    
-                    await self.log_result("search_trending", True, 
-                                        f"Trending API working - {len(popular_cats)} popular categories, {len(trending_tags)} trending tags, {len(top_players)} top players")
-                    return True
-                    
+            # User1 follows User2
+            response = await self.client.post(
+                f"{BACKEND_URL}/player/{self.user2_id}/follow",
+                json={"follower_id": self.user1_id}
+            )
+            if response.status_code == 200:
+                follow_data = response.json()
+                if follow_data.get("following"):
+                    await self.log_result("User1 follows User2", True, "Follow successful")
                 else:
-                    error_data = await response.text()
-                    await self.log_result("search_trending", False, 
-                                        f"HTTP {response.status}: {error_data}")
-                    return False
-                    
+                    await self.log_result("User1 follows User2", False, f"Follow returned: {follow_data}")
+            else:
+                await self.log_result("User1 follows User2", False, f"Status: {response.status_code}, Response: {response.text}")
+                return False
+
+            # Check User2 notifications should have 1 follow notification
+            response = await self.client.get(f"{BACKEND_URL}/notifications/{self.user2_id}")
+            if response.status_code == 200:
+                notifications = response.json()
+                follow_notifications = [n for n in notifications if n.get("type") == "follow"]
+                if len(follow_notifications) == 1:
+                    notif = follow_notifications[0]
+                    # Validate notification structure
+                    required_fields = ["id", "type", "title", "body", "icon", "data", "actor_id", "actor_pseudo", "actor_avatar_seed", "read", "created_at"]
+                    missing_fields = [field for field in required_fields if field not in notif]
+                    if not missing_fields:
+                        await self.log_result("User2 has follow notification with correct structure", True, f"Notification: {notif['title']} - {notif['body']}")
+                        return True
+                    else:
+                        await self.log_result("User2 follow notification structure", False, f"Missing fields: {missing_fields}")
+                else:
+                    await self.log_result("User2 has follow notification", False, f"Expected 1 follow notification, got {len(follow_notifications)}")
+            else:
+                await self.log_result("Get User2 notifications after follow", False, f"Status: {response.status_code}")
+                
         except Exception as e:
-            await self.log_result("search_trending", False, f"Exception: {str(e)}")
-            return False
+            await self.log_result("Follow notification test", False, f"Exception: {str(e)}")
+            
+        return False
+
+    async def test_4_message_notification(self):
+        """Test 4: Trigger message notification"""
+        print("=== Test 4: Message Notification ===")
+        
+        try:
+            # Send message from User1 to User2
+            response = await self.client.post(
+                f"{BACKEND_URL}/chat/send",
+                json={
+                    "sender_id": self.user1_id,
+                    "receiver_id": self.user2_id,
+                    "content": "Hello!",
+                    "message_type": "text"
+                }
+            )
+            if response.status_code == 200:
+                message_data = response.json()
+                await self.log_result("Send message User1 to User2", True, f"Message ID: {message_data['id']}")
+            else:
+                await self.log_result("Send message User1 to User2", False, f"Status: {response.status_code}, Response: {response.text}")
+                return False
+
+            # Check User2 notifications should now have 2 notifications (follow + message)
+            response = await self.client.get(f"{BACKEND_URL}/notifications/{self.user2_id}")
+            if response.status_code == 200:
+                notifications = response.json()
+                message_notifications = [n for n in notifications if n.get("type") == "message"]
+                if len(message_notifications) >= 1:
+                    await self.log_result("User2 has message notification", True, f"Found {len(message_notifications)} message notification(s)")
+                else:
+                    await self.log_result("User2 has message notification", False, f"Expected message notification, got {len(message_notifications)}")
+
+                # Check unread count should be 2
+                response = await self.client.get(f"{BACKEND_URL}/notifications/{self.user2_id}/unread-count")
+                if response.status_code == 200:
+                    count_data = response.json()
+                    unread_count = count_data.get("unread_count", 0)
+                    if unread_count >= 2:
+                        await self.log_result("User2 unread count after message", True, f"Unread count: {unread_count}")
+                        return True
+                    else:
+                        await self.log_result("User2 unread count after message", False, f"Expected >=2, got {unread_count}")
+                else:
+                    await self.log_result("Get User2 unread count", False, f"Status: {response.status_code}")
+            else:
+                await self.log_result("Get User2 notifications after message", False, f"Status: {response.status_code}")
+                
+        except Exception as e:
+            await self.log_result("Message notification test", False, f"Exception: {str(e)}")
+            
+        return False
+
+    async def test_5_mark_single_read(self):
+        """Test 5: Mark single notification as read"""
+        print("=== Test 5: Mark Single Notification as Read ===")
+        
+        try:
+            # Get first notification
+            response = await self.client.get(f"{BACKEND_URL}/notifications/{self.user2_id}")
+            if response.status_code == 200:
+                notifications = response.json()
+                if len(notifications) > 0:
+                    first_notif = notifications[0]
+                    notif_id = first_notif["id"]
+                    
+                    # Mark as read
+                    response = await self.client.post(
+                        f"{BACKEND_URL}/notifications/{notif_id}/read",
+                        json={"user_id": self.user2_id}
+                    )
+                    if response.status_code == 200:
+                        await self.log_result("Mark single notification as read", True, f"Notification {notif_id} marked as read")
+                        
+                        # Verify unread count decreased
+                        response = await self.client.get(f"{BACKEND_URL}/notifications/{self.user2_id}/unread-count")
+                        if response.status_code == 200:
+                            count_data = response.json()
+                            unread_count = count_data.get("unread_count", 0)
+                            await self.log_result("Unread count decreased after mark read", True, f"New unread count: {unread_count}")
+                            return True
+                        else:
+                            await self.log_result("Check unread count after mark read", False, f"Status: {response.status_code}")
+                    else:
+                        await self.log_result("Mark single notification as read", False, f"Status: {response.status_code}, Response: {response.text}")
+                else:
+                    await self.log_result("Get notifications for mark read test", False, "No notifications found")
+            else:
+                await self.log_result("Get notifications for mark read test", False, f"Status: {response.status_code}")
+                
+        except Exception as e:
+            await self.log_result("Mark single read test", False, f"Exception: {str(e)}")
+            
+        return False
+
+    async def test_6_mark_all_read(self):
+        """Test 6: Mark all notifications as read"""
+        print("=== Test 6: Mark All Notifications as Read ===")
+        
+        try:
+            # Mark all as read
+            response = await self.client.post(
+                f"{BACKEND_URL}/notifications/read-all",
+                json={"user_id": self.user2_id}
+            )
+            if response.status_code == 200:
+                await self.log_result("Mark all notifications as read", True, "All notifications marked as read")
+                
+                # Verify unread count is 0
+                response = await self.client.get(f"{BACKEND_URL}/notifications/{self.user2_id}/unread-count")
+                if response.status_code == 200:
+                    count_data = response.json()
+                    unread_count = count_data.get("unread_count", 0)
+                    if unread_count == 0:
+                        await self.log_result("Unread count is zero after mark all read", True, "Unread count: 0")
+                        return True
+                    else:
+                        await self.log_result("Unread count is zero after mark all read", False, f"Expected 0, got {unread_count}")
+                else:
+                    await self.log_result("Check unread count after mark all read", False, f"Status: {response.status_code}")
+            else:
+                await self.log_result("Mark all notifications as read", False, f"Status: {response.status_code}, Response: {response.text}")
+                
+        except Exception as e:
+            await self.log_result("Mark all read test", False, f"Exception: {str(e)}")
+            
+        return False
+
+    async def test_7_notification_settings(self):
+        """Test 7: Notification settings CRUD and enforcement"""
+        print("=== Test 7: Notification Settings ===")
+        
+        try:
+            # Get default settings for user1
+            response = await self.client.get(f"{BACKEND_URL}/notifications/{self.user1_id}/settings")
+            if response.status_code == 200:
+                settings = response.json()
+                # Check all default settings are True
+                expected_fields = ["challenges", "match_results", "follows", "messages", "likes", "comments", "system"]
+                all_true = all(settings.get(field) == True for field in expected_fields)
+                if all_true:
+                    await self.log_result("Default notification settings", True, f"All settings are True by default: {settings}")
+                else:
+                    await self.log_result("Default notification settings", False, f"Some settings not True: {settings}")
+            else:
+                await self.log_result("Get default notification settings", False, f"Status: {response.status_code}")
+
+            # Update settings - disable follows
+            response = await self.client.post(
+                f"{BACKEND_URL}/notifications/{self.user1_id}/settings",
+                json={"user_id": self.user1_id, "follows": False}
+            )
+            if response.status_code == 200:
+                updated_settings = response.json()
+                if updated_settings.get("follows") == False:
+                    await self.log_result("Update notification settings - disable follows", True, f"Follows disabled: {updated_settings}")
+                else:
+                    await self.log_result("Update notification settings - disable follows", False, f"Follows still enabled: {updated_settings}")
+            else:
+                await self.log_result("Update notification settings", False, f"Status: {response.status_code}, Response: {response.text}")
+
+            # Test settings enforcement: User2 follows User1 (should NOT create notification)
+            response = await self.client.post(
+                f"{BACKEND_URL}/player/{self.user1_id}/follow",
+                json={"follower_id": self.user2_id}
+            )
+            if response.status_code == 200:
+                await self.log_result("User2 follows User1 (for settings test)", True, "Follow successful")
+                
+                # Check User1 notifications - should NOT have new follow notification
+                response = await self.client.get(f"{BACKEND_URL}/notifications/{self.user1_id}")
+                if response.status_code == 200:
+                    notifications = response.json()
+                    follow_notifications = [n for n in notifications if n.get("type") == "follow"]
+                    if len(follow_notifications) == 0:
+                        await self.log_result("Settings enforcement - no follow notification when disabled", True, "No follow notification created (correctly)")
+                        return True
+                    else:
+                        await self.log_result("Settings enforcement - no follow notification when disabled", False, f"Found {len(follow_notifications)} follow notifications, expected 0")
+                else:
+                    await self.log_result("Check User1 notifications for settings enforcement", False, f"Status: {response.status_code}")
+            else:
+                await self.log_result("User2 follows User1 (for settings test)", False, f"Status: {response.status_code}")
+                
+        except Exception as e:
+            await self.log_result("Notification settings test", False, f"Exception: {str(e)}")
+            
+        return False
+
+    async def test_8_like_notification(self):
+        """Test 8: Like notification"""
+        print("=== Test 8: Like Notification ===")
+        
+        try:
+            # First seed questions
+            response = await self.client.post(f"{BACKEND_URL}/seed-questions")
+            if response.status_code == 200:
+                await self.log_result("Seed questions for like test", True, "Questions seeded successfully")
+            else:
+                await self.log_result("Seed questions for like test", False, f"Status: {response.status_code}")
+
+            # Create a wall post by user1
+            response = await self.client.post(
+                f"{BACKEND_URL}/category/series_tv/wall",
+                json={"user_id": self.user1_id, "content": "Test post for like notification"}
+            )
+            if response.status_code == 200:
+                post_data = response.json()
+                post_id = post_data["id"]
+                await self.log_result("Create wall post for like test", True, f"Post ID: {post_id}")
+                
+                # Like the post as user2
+                response = await self.client.post(
+                    f"{BACKEND_URL}/wall/{post_id}/like",
+                    json={"user_id": self.user2_id}
+                )
+                if response.status_code == 200:
+                    like_data = response.json()
+                    if like_data.get("liked"):
+                        await self.log_result("User2 likes User1's post", True, "Post liked successfully")
+                        
+                        # Check user1 notifications for like notification
+                        response = await self.client.get(f"{BACKEND_URL}/notifications/{self.user1_id}")
+                        if response.status_code == 200:
+                            notifications = response.json()
+                            like_notifications = [n for n in notifications if n.get("type") == "like"]
+                            if len(like_notifications) >= 1:
+                                await self.log_result("User1 has like notification", True, f"Found {len(like_notifications)} like notification(s)")
+                                return True
+                            else:
+                                await self.log_result("User1 has like notification", False, f"Expected like notification, got {len(like_notifications)}")
+                        else:
+                            await self.log_result("Check User1 notifications for like", False, f"Status: {response.status_code}")
+                    else:
+                        await self.log_result("User2 likes User1's post", False, f"Like failed: {like_data}")
+                else:
+                    await self.log_result("User2 likes User1's post", False, f"Status: {response.status_code}, Response: {response.text}")
+            else:
+                await self.log_result("Create wall post for like test", False, f"Status: {response.status_code}, Response: {response.text}")
+                
+        except Exception as e:
+            await self.log_result("Like notification test", False, f"Exception: {str(e)}")
+            
+        return False
+
+    async def test_9_comment_notification(self):
+        """Test 9: Comment notification"""
+        print("=== Test 9: Comment Notification ===")
+        
+        try:
+            # Get the latest post to comment on
+            response = await self.client.get(f"{BACKEND_URL}/category/series_tv/wall?user_id={self.user1_id}")
+            if response.status_code == 200:
+                posts = response.json()
+                if len(posts) > 0:
+                    post_id = posts[0]["id"]
+                    
+                    # Comment on the post as user2
+                    response = await self.client.post(
+                        f"{BACKEND_URL}/wall/{post_id}/comment",
+                        json={"user_id": self.user2_id, "content": "Nice post!"}
+                    )
+                    if response.status_code == 200:
+                        comment_data = response.json()
+                        await self.log_result("User2 comments on User1's post", True, f"Comment ID: {comment_data['id']}")
+                        
+                        # Check user1 notifications for comment notification  
+                        response = await self.client.get(f"{BACKEND_URL}/notifications/{self.user1_id}")
+                        if response.status_code == 200:
+                            notifications = response.json()
+                            comment_notifications = [n for n in notifications if n.get("type") == "comment"]
+                            if len(comment_notifications) >= 1:
+                                await self.log_result("User1 has comment notification", True, f"Found {len(comment_notifications)} comment notification(s)")
+                                return True
+                            else:
+                                await self.log_result("User1 has comment notification", False, f"Expected comment notification, got {len(comment_notifications)}")
+                        else:
+                            await self.log_result("Check User1 notifications for comment", False, f"Status: {response.status_code}")
+                    else:
+                        await self.log_result("User2 comments on User1's post", False, f"Status: {response.status_code}, Response: {response.text}")
+                else:
+                    await self.log_result("Get posts for comment test", False, "No posts found")
+            else:
+                await self.log_result("Get posts for comment test", False, f"Status: {response.status_code}")
+                
+        except Exception as e:
+            await self.log_result("Comment notification test", False, f"Exception: {str(e)}")
+            
+        return False
 
     async def run_all_tests(self):
-        """Run all NEW Search System API tests in sequence."""
-        print("🔍 Starting Duelo Backend API Testing - NEW Search System")
-        print(f"📡 Base URL: {BASE_URL}")
-        print("🎯 Testing: Themes, Players, Content, Trending Search")
-        print("=" * 70)
+        """Run all notification tests"""
+        print("🔔 Starting Notifications System Backend Testing 🔔")
+        print("=" * 60)
         
-        # Run tests in the required sequence
-        tests = [
-            ("Guest Registration", self.test_guest_registration),
-            ("Search Themes", self.test_search_themes),
-            ("Search Players", self.test_search_players),
-            ("Search Content", self.test_search_content),
-            ("Search Trending", self.test_search_trending),
-        ]
+        # Test 1: User Registration
+        if not await self.test_1_user_registration():
+            print("❌ Cannot continue tests without user registration")
+            return False
+            
+        # Test 2: Empty notifications initially
+        await self.test_2_empty_notifications()
         
-        passed_count = 0
-        failed_count = 0
+        # Test 3: Follow notification
+        await self.test_3_follow_notification()
         
-        for test_name, test_func in tests:
-            try:
-                success = await test_func()
-                if success:
-                    passed_count += 1
-                else:
-                    failed_count += 1
-            except Exception as e:
-                print(f"❌ {test_name}: Unexpected error - {str(e)}")
-                failed_count += 1
+        # Test 4: Message notification 
+        await self.test_4_message_notification()
         
-        # Print summary
-        print("\n" + "=" * 70)
-        print("🏁 NEW SEARCH SYSTEM TEST SUMMARY")
-        print("=" * 70)
-        print(f"✅ Passed: {passed_count}")
-        print(f"❌ Failed: {failed_count}")
-        print(f"📊 Total: {passed_count + failed_count}")
+        # Test 5: Mark single as read
+        await self.test_5_mark_single_read()
         
-        if self.test_user_id:
-            print(f"👤 Test User: {self.test_user_pseudo}")
-            print(f"🆔 User ID: {self.test_user_id}")
+        # Test 6: Mark all as read
+        await self.test_6_mark_all_read()
         
-        # Return results for further processing
-        return self.results
+        # Test 7: Notification settings
+        await self.test_7_notification_settings()
+        
+        # Test 8: Like notification
+        await self.test_8_like_notification()
+        
+        # Test 9: Comment notification
+        await self.test_9_comment_notification()
+        
+        # Summary
+        print("=" * 60)
+        print("🔔 NOTIFICATIONS SYSTEM TEST SUMMARY 🔔")
+        print("=" * 60)
+        
+        passed_tests = [r for r in self.test_results if "✅ PASS" in r["status"]]
+        failed_tests = [r for r in self.test_results if "❌ FAIL" in r["status"]]
+        
+        print(f"✅ PASSED: {len(passed_tests)}")
+        print(f"❌ FAILED: {len(failed_tests)}")
+        print()
+        
+        if failed_tests:
+            print("FAILED TESTS:")
+            for test in failed_tests:
+                print(f"  ❌ {test['test']}: {test['details']}")
+            print()
+        
+        print("ALL TEST RESULTS:")
+        for test in self.test_results:
+            print(f"  {test['status']}: {test['test']}")
+        
+        await self.client.aclose()
+        return len(failed_tests) == 0
 
 async def main():
-    """Main test execution."""
-    async with DueloSearchTester() as tester:
-        results = await tester.run_all_tests()
-        return results
-
+    test_suite = NotificationsTestSuite()
+    success = await test_suite.run_all_tests()
+    if success:
+        print("\n🎉 ALL NOTIFICATIONS TESTS PASSED!")
+    else:
+        print("\n⚠️  SOME NOTIFICATIONS TESTS FAILED!")
+    
 if __name__ == "__main__":
     asyncio.run(main())
