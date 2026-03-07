@@ -2680,6 +2680,209 @@ async def themes_explore(user_id: Optional[str] = None, db: AsyncSession = Depen
     return {"pillars": pillars}
 
 
+# ── Social & Forge APIs ──
+
+# Tribes = 27 clusters (9 pillars × 3 sub-cats)
+TRIBES_DATA = []
+for p in PILLARS_DATA:
+    for t in p["themes"]:
+        TRIBES_DATA.append({
+            "id": t["id"],
+            "name": t["name"],
+            "icon": t["icon"],
+            "pillar_id": p["id"],
+            "pillar_name": p["name"],
+            "pillar_color": p["color"],
+            "playable": t["playable"],
+        })
+
+
+@api_router.get("/social/pulse/{user_id}")
+async def social_pulse(user_id: str, db: AsyncSession = Depends(get_db)):
+    """Activity feed: exploits, records, level-ups with DÉFIER data."""
+    u_res = await db.execute(select(User).where(User.id == user_id))
+    user = u_res.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    feed = []
+
+    # 1. Recent matches across ALL players (exploit cards)
+    recent = await db.execute(
+        select(Match, User).join(User, User.id == Match.player1_id)
+        .order_by(Match.created_at.desc()).limit(20)
+    )
+    for row in recent:
+        m, u = row[0], row[1]
+        cat_color = CATEGORY_COLORS.get(m.category, "#8A2BE2")
+        cat_name = CATEGORY_MAP.get(m.category, m.category)
+        is_perfect = m.player1_correct == 7
+        is_self = u.id == user_id
+
+        exploit_type = "victory" if m.winner_id == m.player1_id else "defeat"
+        if is_perfect:
+            exploit_type = "perfect"
+
+        feed.append({
+            "type": exploit_type,
+            "id": f"match_{m.id}",
+            "user_id": u.id,
+            "user_pseudo": u.pseudo,
+            "user_avatar_seed": u.avatar_seed,
+            "user_level": get_category_level(getattr(u, CATEGORY_XP_FIELD.get(m.category, "xp_series_tv"), 0)),
+            "category": m.category,
+            "category_name": cat_name,
+            "category_color": cat_color,
+            "pillar_color": cat_color,
+            "score": f"{m.player1_score} - {m.player2_score}",
+            "correct": m.player1_correct,
+            "opponent_pseudo": m.player2_pseudo,
+            "xp_earned": m.xp_earned or 0,
+            "is_self": is_self,
+            "can_challenge": not is_self,
+            "icon": "🏆" if is_perfect else ("⚔️" if exploit_type == "victory" else "💀"),
+            "title": "Score Parfait 7/7 !" if is_perfect else (
+                f"Victoire en {cat_name}" if exploit_type == "victory" else f"Match en {cat_name}"
+            ),
+            "created_at": m.created_at.isoformat(),
+        })
+
+    # 2. High streak players
+    streak_res = await db.execute(
+        select(User).where(User.current_streak >= 3).order_by(User.current_streak.desc()).limit(5)
+    )
+    for u in streak_res.scalars().all():
+        if u.id == user_id:
+            continue
+        feed.append({
+            "type": "streak",
+            "id": f"streak_{u.id}",
+            "user_id": u.id,
+            "user_pseudo": u.pseudo,
+            "user_avatar_seed": u.avatar_seed,
+            "user_level": get_category_level(u.total_xp // max(len(CATEGORY_XP_FIELD), 1)),
+            "category": "",
+            "category_name": "",
+            "category_color": "#FFD700",
+            "pillar_color": "#FFD700",
+            "title": f"Série de {u.current_streak} victoires !",
+            "icon": "🔥",
+            "can_challenge": True,
+            "is_self": False,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+
+    feed.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+    return {"feed": feed[:30]}
+
+
+@api_router.get("/social/tribes")
+async def social_tribes(user_id: Optional[str] = None, db: AsyncSession = Depends(get_db)):
+    """Get 27 tribes (clusters) with throne holders (top player per category)."""
+    tribes = []
+    for tribe in TRIBES_DATA:
+        xp_field = CATEGORY_XP_FIELD.get(tribe["id"])
+        throne = None
+        member_count = 0
+
+        if xp_field:
+            # Get throne holder (top XP player in this category)
+            top_res = await db.execute(
+                select(User).where(getattr(User, xp_field) > 0)
+                .order_by(getattr(User, xp_field).desc()).limit(1)
+            )
+            top_user = top_res.scalar_one_or_none()
+            if top_user:
+                throne = {
+                    "id": top_user.id,
+                    "pseudo": top_user.pseudo,
+                    "avatar_seed": top_user.avatar_seed,
+                    "level": get_category_level(getattr(top_user, xp_field, 0)),
+                    "title": get_category_title(tribe["id"], get_category_level(getattr(top_user, xp_field, 0))),
+                    "xp": getattr(top_user, xp_field, 0),
+                }
+
+            # Count members (players with XP > 0)
+            count_res = await db.execute(
+                select(func.count(User.id)).where(getattr(User, xp_field) > 0)
+            )
+            member_count = count_res.scalar() or 0
+
+        tribes.append({
+            **tribe,
+            "throne": throne,
+            "member_count": member_count,
+        })
+
+    return {"tribes": tribes}
+
+
+@api_router.get("/social/coach/{user_id}")
+async def social_coach(user_id: str, db: AsyncSession = Depends(get_db)):
+    """AI Coach: rivalry-based suggestions and challenges."""
+    u_res = await db.execute(select(User).where(User.id == user_id))
+    user = u_res.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    suggestions = []
+
+    # Find rivals (players with similar XP who recently played)
+    xp_range = max(user.total_xp - 500, 0), user.total_xp + 500
+    rivals_res = await db.execute(
+        select(User).where(
+            User.id != user_id,
+            User.total_xp.between(xp_range[0], xp_range[1])
+        ).order_by(func.random()).limit(3)
+    )
+    rivals = rivals_res.scalars().all()
+
+    for rival in rivals:
+        # Find where rival is ahead
+        for cat_key, xp_field in CATEGORY_XP_FIELD.items():
+            my_xp = getattr(user, xp_field, 0)
+            rival_xp = getattr(rival, xp_field, 0)
+            if rival_xp > my_xp and rival_xp > 0:
+                cat_name = CATEGORY_MAP.get(cat_key, cat_key)
+                cat_color = CATEGORY_COLORS.get(cat_key, "#8A2BE2")
+                suggestions.append({
+                    "type": "rivalry",
+                    "rival_id": rival.id,
+                    "rival_pseudo": rival.pseudo,
+                    "rival_avatar_seed": rival.avatar_seed,
+                    "category": cat_key,
+                    "category_name": cat_name,
+                    "category_color": cat_color,
+                    "rival_level": get_category_level(rival_xp),
+                    "my_level": get_category_level(my_xp),
+                    "message": f"@{rival.pseudo} te devance en {cat_name} ! Reprends ton trône !",
+                    "icon": "⚡",
+                })
+                break  # One suggestion per rival
+
+    # Weak category suggestion
+    weakest_cat = None
+    lowest_xp = float('inf')
+    for cat_key, xp_field in CATEGORY_XP_FIELD.items():
+        xp = getattr(user, xp_field, 0)
+        if xp < lowest_xp:
+            lowest_xp = xp
+            weakest_cat = cat_key
+
+    if weakest_cat:
+        cat_name = CATEGORY_MAP.get(weakest_cat, weakest_cat)
+        suggestions.append({
+            "type": "improve",
+            "category": weakest_cat,
+            "category_name": cat_name,
+            "category_color": CATEGORY_COLORS.get(weakest_cat, "#8A2BE2"),
+            "message": f"Tu n'as que {int(lowest_xp)} XP en {cat_name}. Lance un match pour progresser !",
+            "icon": "📈",
+        })
+
+    return {"suggestions": suggestions[:5]}
+
+
 # ── Admin Dashboard (Desktop Web) ──
 
 @api_router.get("/admin/dashboard", response_class=HTMLResponse)

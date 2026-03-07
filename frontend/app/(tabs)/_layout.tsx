@@ -42,7 +42,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="players"
         options={{
-          tabBarIcon: ({ focused }) => <TabIcon label="Joueurs" focused={focused} icon="👥" />,
+          tabBarIcon: ({ focused }) => <TabIcon label="Social" focused={focused} icon="⚡" />,
         }}
       />
       <Tabs.Screen
