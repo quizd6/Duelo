@@ -64,7 +64,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="players"
         options={{
-          tabBarIcon: ({ focused }) => <TabIcon label="MESSAGE" focused={focused} iconSource={TAB_ICONS.social} />,
+          tabBarIcon: ({ focused }) => <TabIcon label="Social" focused={focused} iconSource={TAB_ICONS.social} />,
         }}
       />
       <Tabs.Screen
