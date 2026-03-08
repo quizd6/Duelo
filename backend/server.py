@@ -2624,72 +2624,82 @@ PILLARS_DATA = [
 
 @api_router.get("/themes/explore")
 async def themes_explore(user_id: Optional[str] = None, db: AsyncSession = Depends(get_db)):
-    """Return pillar structure with user progress for the themes page."""
-    user = None
+    """Return pillar structure from new Theme table for the themes page.
+    Pillars = Super Categories, Themes = Clusters, Topics = Real Themes."""
+
+    # Get all themes from DB
+    result = await db.execute(select(Theme).order_by(Theme.super_category, Theme.cluster, Theme.name))
+    all_themes = result.scalars().all()
+
+    if not all_themes:
+        return {"pillars": []}
+
+    # Get user theme XP if logged in
+    user_xp_map = {}
     if user_id:
-        u_res = await db.execute(select(User).where(User.id == user_id))
-        user = u_res.scalar_one_or_none()
+        xp_res = await db.execute(select(UserThemeXP).where(UserThemeXP.user_id == user_id))
+        for uxp in xp_res.scalars().all():
+            user_xp_map[uxp.theme_id] = uxp.xp
+
+    # Group by super_category → cluster → themes
+    sc_map = {}  # super_category → {cluster → [themes]}
+    for t in all_themes:
+        if t.super_category not in sc_map:
+            sc_map[t.super_category] = {}
+        if t.cluster not in sc_map[t.super_category]:
+            sc_map[t.super_category][t.cluster] = []
+        sc_map[t.super_category][t.cluster].append(t)
 
     pillars = []
-    for pillar in PILLARS_DATA:
-        themes = []
-        for theme in pillar["themes"]:
-            theme_data = {
-                "id": theme["id"],
-                "name": theme["name"],
-                "icon": theme["icon"],
-                "playable": theme["playable"],
-                "level": 0,
-                "xp": 0,
-                "title": "",
-                "title_lvl50": "",
-                "xp_progress": {"current": 0, "needed": 500, "progress": 0.0},
-                "total_questions": 0,
-                "topics": [],
-            }
+    for sc_name, clusters in sc_map.items():
+        meta = SUPER_CATEGORY_META.get(sc_name, {"icon": "❓", "color": "#8A2BE2", "label": sc_name})
 
-            # Add topics with icon_url
-            for topic in theme.get("topics", []):
-                theme_data["topics"].append({
-                    "id": topic["id"],
-                    "name": topic["name"],
-                    "icon": topic.get("icon", ""),
-                    "icon_url": topic.get("icon_url", ""),
-                    "category_id": theme["id"],
+        # Build cluster "themes" for the carousel
+        cluster_themes = []
+        for cluster_name, theme_list in clusters.items():
+            cluster_icon = CLUSTER_ICONS.get(cluster_name, "📁")
+
+            # Aggregate cluster stats
+            total_q = sum(t.question_count or 0 for t in theme_list)
+            cluster_xp = sum(user_xp_map.get(t.id, 0) for t in theme_list)
+            cluster_level = get_category_level(cluster_xp)
+
+            # Build topics (real individual themes) for each cluster
+            topics = []
+            for t in theme_list:
+                t_xp = user_xp_map.get(t.id, 0)
+                t_level = get_category_level(t_xp)
+                topics.append({
+                    "id": t.id,
+                    "name": t.name,
+                    "icon": t.name[0].upper() if t.name else "?",
+                    "icon_url": t.icon_url or "",
+                    "category_id": t.id,
+                    "level": t_level,
+                    "description": t.description or "",
                 })
 
-            # If playable, get real data
-            xp_field = CATEGORY_XP_FIELD.get(theme["id"])
-            if xp_field:
-                # Question count
-                q_count = await db.execute(
-                    select(func.count(Question.id)).where(Question.category == theme["id"])
-                )
-                theme_data["total_questions"] = q_count.scalar() or 0
-
-                # Lvl 50 title
-                titles = CATEGORY_TITLES.get(theme["id"], {})
-                theme_data["title_lvl50"] = titles.get(50, "Maître Absolu")
-
-                if user:
-                    cat_xp = getattr(user, xp_field, 0)
-                    cat_level = get_category_level(cat_xp)
-                    cat_title = get_category_title(theme["id"], cat_level)
-                    cat_progress = get_xp_progress(cat_xp, cat_level)
-                    theme_data["level"] = cat_level
-                    theme_data["xp"] = cat_xp
-                    theme_data["title"] = cat_title
-                    theme_data["xp_progress"] = cat_progress
-
-            themes.append(theme_data)
+            cluster_themes.append({
+                "id": f"cluster_{sc_name}_{cluster_name}".replace(" ", "_"),
+                "name": cluster_name,
+                "icon": cluster_icon,
+                "playable": True,
+                "level": cluster_level,
+                "xp": cluster_xp,
+                "title": "",
+                "title_lvl50": "",
+                "xp_progress": get_xp_progress(cluster_xp, cluster_level),
+                "total_questions": total_q,
+                "topics": topics,
+            })
 
         pillars.append({
-            "id": pillar["id"],
-            "name": pillar["name"],
-            "label": pillar["label"],
-            "color": pillar["color"],
-            "icon": pillar["icon"],
-            "themes": themes,
+            "id": sc_name.lower(),
+            "name": meta["label"].upper(),
+            "label": ", ".join(clusters.keys()),
+            "color": meta["color"],
+            "icon": meta["icon"],
+            "themes": cluster_themes,
         })
 
     return {"pillars": pillars}

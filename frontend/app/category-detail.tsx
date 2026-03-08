@@ -19,12 +19,16 @@ const CATEGORY_META: Record<string, { icon: string; color: string; bgPattern: st
   histoire: { icon: '🏛️', color: '#FFD700', bgPattern: '⚔️🏰👑🏛️📜' },
 };
 
+// Detect new theme IDs (not old hardcoded categories)
+const isNewThemeId = (tid: string) => !CATEGORY_META[tid];
+
 type CategoryDetail = {
   id: string; name: string; description: string;
   total_questions: number; followers_count: number;
   user_level: number; user_title: string; user_xp: number;
   xp_progress: { current: number; needed: number; progress: number };
   is_following: boolean; completion_pct: number;
+  color_hex?: string; icon_url?: string; question_count?: number;
 };
 
 type WallPostData = {
@@ -49,10 +53,12 @@ type LeaderEntry = {
 export default function CategoryDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const meta = CATEGORY_META[id || ''] || { icon: '❓', color: '#8A2BE2', bgPattern: '' };
+  const isNewTheme = id ? isNewThemeId(id) : false;
+  const oldMeta = CATEGORY_META[id || ''] || { icon: '❓', color: '#8A2BE2', bgPattern: '' };
 
   const [userId, setUserId] = useState('');
   const [detail, setDetail] = useState<CategoryDetail | null>(null);
+  const [meta, setMeta] = useState(oldMeta);
   const [posts, setPosts] = useState<WallPostData[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -88,9 +94,38 @@ export default function CategoryDetailScreen() {
 
   const fetchDetail = async (uid: string) => {
     try {
-      const res = await fetch(`${API_URL}/api/category/${id}/detail?user_id=${uid}`);
-      const data = await res.json();
-      setDetail(data);
+      if (isNewTheme) {
+        // New theme system
+        const res = await fetch(`${API_URL}/api/theme/${id}/detail${uid ? `?user_id=${uid}` : ''}`);
+        const data = await res.json();
+        // Map to CategoryDetail format
+        setDetail({
+          id: data.id,
+          name: data.name,
+          description: data.description || '',
+          total_questions: data.question_count || 0,
+          followers_count: data.followers_count || 0,
+          user_level: data.user_level || 0,
+          user_title: data.user_title || '',
+          user_xp: data.user_xp || 0,
+          xp_progress: data.xp_progress || { current: 0, needed: 500, progress: 0 },
+          is_following: data.is_following || false,
+          completion_pct: 0,
+          color_hex: data.color_hex,
+          icon_url: data.icon_url,
+          question_count: data.question_count,
+        });
+        // Update meta dynamically
+        setMeta({
+          icon: data.name?.[0]?.toUpperCase() || '?',
+          color: data.color_hex || '#8A2BE2',
+          bgPattern: '',
+        });
+      } else {
+        const res = await fetch(`${API_URL}/api/category/${id}/detail?user_id=${uid}`);
+        const data = await res.json();
+        setDetail(data);
+      }
     } catch {}
   };
 
@@ -126,14 +161,21 @@ export default function CategoryDetailScreen() {
 
   const handlePlay = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    router.push(`/matchmaking?category=${id}`);
+    if (isNewTheme) {
+      router.push(`/matchmaking?category=${id}&themeName=${encodeURIComponent(detail?.name || '')}`);
+    } else {
+      router.push(`/matchmaking?category=${id}`);
+    }
   };
 
   const handleLeaderboard = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setShowLeaderboard(true);
     try {
-      const res = await fetch(`${API_URL}/api/category/${id}/leaderboard`);
+      const endpoint = isNewTheme
+        ? `${API_URL}/api/theme/${id}/leaderboard`
+        : `${API_URL}/api/category/${id}/leaderboard`;
+      const res = await fetch(endpoint);
       const data = await res.json();
       setLeaderboard(data);
     } catch {}

@@ -282,6 +282,12 @@ export default function ThemesScreen() {
 
   const handleThemePress = (theme: ThemeData) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    // Clusters have topics → scroll down to show them, don't navigate
+    if (theme.topics && theme.topics.length > 0) {
+      // The topics are already displayed below - no need to navigate
+      return;
+    }
+    // Fallback for legacy themes without topics
     if (theme.playable) {
       router.push(`/category-detail?id=${theme.id}`);
     }
@@ -493,7 +499,7 @@ export default function ThemesScreen() {
                       pillarColor={currentColor}
                       onPress={() => {
                         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                        router.push(`/category-detail?id=${topic.category_id}`);
+                        router.push(`/category-detail?id=${topic.id}`);
                       }}
                     />
                   ))}
