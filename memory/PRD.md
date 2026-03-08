@@ -1,117 +1,121 @@
 # Duelo - PRD (Product Requirements Document)
 
-## Vision
-Application de quiz multijoueur compétitive avec esthétique "Dark Mode Premium", inspirée de QuizUp (2014).
+## Original Problem Statement
+Application mobile quiz "Duelo" inspirée de "Quiz Up". L'app supporte une hiérarchie de données à 3 niveaux : Super Catégorie → Cluster → Thème, avec import de données CSV.
 
-## Stack Technique
-- **Frontend**: React Native Expo (SDK 54) avec Expo Router
-- **Backend**: FastAPI (Python) avec SQLAlchemy + asyncpg
-- **Base de données**: PostgreSQL (Supabase)
-- **Migrations**: Alembic
+## Tech Stack
+- **Frontend**: Expo (React Native) avec Expo Router (file-based routing)
+- **Backend**: FastAPI (Python) avec SQLAlchemy ORM
+- **Database**: PostgreSQL (via Supabase)
+- **Data Import**: asyncpg pour bulk COPY CSV → PostgreSQL
 
-## Fonctionnalités Implémentées
-
-### 1. Authentification
-- Mode Invité avec pseudo unique (vérification en temps réel)
-- Détection automatique du pays via IP (ip-api.com)
-
-### 2. Système de Jeu
-- Matchmaking intelligent par catégorie (niveau +/- 5)
-- Bot fallback après 5 secondes
-- 7 questions par match, chronomètre 10s
-- Scoring basé sur la vitesse
-
-### 3. Catégories
-- Séries TV Cultes, Géographie Mondiale, Histoire de France (10 questions chacune)
-
-### 4. Progression Par Catégorie
-- XP par catégorie (formule: 500 + (N-1)^2 * 10, cap niveau 50)
-- Titres de maîtrise débloquables (niveaux 1, 10, 20, 35, 50)
-- Sélection de titre à afficher
-- Modal de célébration à chaque nouveau titre
-
-### 5. Page Détail Catégorie + Mur Social
-- Header catégorie (icône, nom, description)
-- Boutons Jouer / Suivre / Classement
-- Barre de progression questions complétées
-- Stats: niveau, followers, total questions
-- Classement par catégorie (modal) - lignes cliquables vers profil joueur
-- Mur communautaire: posts texte + image
-- Likes (toggle) + Commentaires
-- Follow/Unfollow catégorie
-- Noms d'auteurs cliquables vers profil joueur
-
-### 6. Profil Personnel (Redesign QuizUp - Testé 2026-03-06)
-- **Hero Card**: Avatar circulaire avec anneau violet, pseudo, titre badge éditable, pays + drapeau
-- **Stats Row**: PARTIES / ABONNÉS / ABONNEMENTS (gros chiffres, séparateurs verticaux)
-- **MES THÈMES**: Grille de cartes colorées (📺 Séries TV violet, 🌍 Géographie cyan, 🏛️ Histoire or) avec icône, nom, niveau, barre XP
-- **STATISTIQUES**: Victoires, Win Rate, Best Streak, XP Total
-- **MES TITRES**: Chips sélectionnables par catégorie
-- **HISTORIQUE**: Cartes de matchs avec résultat et XP
-- **Déconnexion**: Bouton logout
-
-### 7. Profil Public Joueur (Redesign QuizUp - Testé 2026-03-06)
-- Même style Hero Card que le profil personnel
-- Titres de champion (#1 par catégorie) avec bannière dorée
-- **Boutons d'action**: ⚡ Jouer / + Suivre / 💬 Message (cachés pour son propre profil)
-- **SES THÈMES**: Grille catégories avec niveaux
-- **PUBLICATIONS**: Mur de posts cross-catégories (lecture seule)
-- Follow/Unfollow avec mise à jour optimiste
-
-### 8. Système de Follow entre joueurs (Testé 2026-03-06)
-- Follow/Unfollow toggle entre joueurs
-- Protection self-follow
-- Compteurs followers/following intégrés dans les profils
-
-### 9. Chat Éphémère (Testé 2026-03-06)
-- Messagerie 1-à-1 entre joueurs
-- Messages auto-supprimés après 7 jours
-- Bulles colorées, indicateur non-lus, polling 5s
-
-### 10. Onglet Joueurs (Testé 2026-03-06)
-- Recherche de joueurs par pseudo
-- Filtres par catégorie
-- Onglet Messages avec conversations
-
-### 11. Admin Dashboard
-- Import bulk de questions avec détection doublons
-
-## Architecture Base de Données
-- **users**: id, pseudo, email, country, xp_series_tv, xp_geographie, xp_histoire, selected_title, mmr, stats
-- **questions**: id, category, question_text, options, correct_option, difficulty
-- **matches**: id, player1_id, player2_pseudo, category, scores, xp_earned
-- **category_follows**: id, user_id, category_id
-- **wall_posts**: id, user_id, category_id, content, image_base64
-- **post_likes**: id, user_id, post_id
-- **post_comments**: id, user_id, post_id, content
-- **player_follows**: id, follower_id, followed_id (UNIQUE)
-- **chat_messages**: id, sender_id, receiver_id, content, read, created_at
-
-## Architecture Frontend
+## Architecture
 ```
-frontend/app/
-├── (tabs)/
-│   ├── _layout.tsx      # Tab navigator (Jouer / Joueurs / Profil)
-│   ├── home.tsx         # Écran principal, liste catégories
-│   ├── players.tsx      # Recherche joueurs + Messages
-│   └── profile.tsx      # Profil personnel (QuizUp style)
-├── category-detail.tsx  # Page détail catégorie + mur social
-├── player-profile.tsx   # Profil public joueur (QuizUp style)
-├── chat.tsx             # Chat 1-à-1
-├── matchmaking.tsx      # Écran matchmaking
-├── results.tsx          # Résultats de match
-└── index.tsx            # Écran d'inscription
+/app
+├── backend/
+│   ├── server.py          # FastAPI + SQLAlchemy models + all API endpoints
+│   └── static/            # Static assets (fond_duelo.webp)
+└── frontend/
+    ├── app/
+    │   ├── _layout.tsx          # Root layout with cosmic background injection
+    │   ├── +html.tsx            # Custom HTML template for web
+    │   ├── index.tsx            # Login / Guest entry
+    │   ├── (tabs)/
+    │   │   ├── _layout.tsx      # Tab Navigator with glass footer
+    │   │   ├── accueil.tsx      # Feed / Activity tab
+    │   │   ├── home.tsx         # "Jouer" tab - Super Categories
+    │   │   ├── themes.tsx       # Themes exploration
+    │   │   ├── players.tsx      # Social / Messages
+    │   │   ├── profile.tsx      # User profile
+    │   │   └── leaderboard.tsx  # Leaderboard
+    │   ├── super-category.tsx   # Super Category detail
+    │   ├── category-detail.tsx  # Theme detail page
+    │   ├── matchmaking.tsx      # Matchmaking screen
+    │   ├── game.tsx             # Quiz gameplay
+    │   ├── results.tsx          # Quiz results
+    │   ├── chat.tsx             # Chat
+    │   ├── search.tsx           # Search
+    │   └── player-profile.tsx   # Player profile view
+    ├── theme/
+    │   └── glassTheme.ts        # Glassmorphism design tokens
+    ├── components/
+    │   ├── DueloHeader.tsx      # Glass header with centered logo
+    │   └── CosmicBackground.tsx # Background component
+    └── assets/
+        ├── images/fond_duelo.webp  # Cosmic stellar background
+        ├── header/                  # Header icons
+        └── tabs/                    # Tab bar icons
 ```
 
-## Prochaines Étapes (Backlog)
-1. **P1** - Authentification Google/Apple (fournira l'âge)
-2. **P2** - Filtre joueurs par âge (post-auth Google/Apple)
-3. **P2** - Filtre joueurs par distance (géolocalisation IP déjà implémentée)
-4. **P2** - Support vidéo dans les posts du mur
-5. **P2** - Plus de catégories et questions
-6. **P3** - Deep Links pour partage
-7. **P3** - Matchmaking temps réel (WebSocket)
-8. **P3** - Système de saisons et récompenses
-9. **P3** - Notifications push
-10. **P3** - Titres de championnat (événements temporels)
-11. **Refactoring** - Découper server.py en modules
+## Key Features Implemented
+
+### Phase 1: Core Quiz Infrastructure
+- Hierarchical data model: Super Category → Cluster → Theme
+- Bulk CSV import (~30k questions, 60 themes for SCREEN)
+- Quiz logic: 7 questions (2 Easy, 3 Medium, 2 Hard, unique angles)
+- Guest login with username
+- Full gameplay flow: matchmaking → quiz → results
+
+### Phase 2: Glassmorphism Néon-Cristal Design (Current)
+- **Cosmic stellar background**: Fixed background on ALL pages via CSS injection
+- **Frosted glass header**: Dark semi-opaque bar with cyan neon bottom border
+- **Frosted glass footer**: Dark semi-opaque bar with cyan neon top border
+- **Glass containers**: All cards/panels use dark frosted glass with neon borders
+- **Neon-crystal borders**: Uniform cyan neon borders on all UI elements
+- **White text**: High-visibility sans-serif labels throughout
+- **Footer correction**: "MESSAGE" label (not "Massage" or "Social")
+- **Uniform border-radius**: 16px on all panels
+- **Design tokens**: Centralized in `/theme/glassTheme.ts`
+
+## Design Tokens (glassTheme.ts)
+- Glass BG: `rgba(8, 8, 24, 0.65)`
+- Glass BG Dark: `rgba(5, 5, 18, 0.75)`
+- Glass BG Light: `rgba(15, 15, 40, 0.55)`
+- Neon Cyan Border: `rgba(0, 255, 255, 0.25)`
+- Neon Bright Border: `rgba(0, 255, 255, 0.45)`
+- Border Radius: 16px (uniform)
+- Text Primary: #FFFFFF
+- Text Secondary: rgba(255, 255, 255, 0.7)
+
+## Key API Endpoints
+- `POST /api/auth/register-guest` - Guest login
+- `GET /api/explore/super-categories` - List super categories
+- `GET /api/themes/explore` - Hierarchical theme data
+- `GET /api/theme/{theme_id}` - Theme detail
+- `GET /api/game/questions-v2?theme_id={id}` - Quiz questions
+- `POST /api/game/submit-v2` - Submit quiz results
+- `GET /api/profile-v2/{user_id}` - User profile
+- `GET /api/static/fond_duelo.webp` - Serve cosmic background image
+
+## Prioritized Backlog
+
+### P0 - Import Remaining Data
+- Import CSV data for other super categories (SOUND, ARENA, LEGENDS, LAB, etc.)
+- Waiting for user to provide CSV files
+
+### P1 - Theme Icons
+- Integrate URL_Icone from CSV for theme icons
+- Replace placeholder initials with actual icon images
+- Waiting for user to provide icon URLs
+
+### P2 - Follow & Leaderboard
+- Implement "Follow" functionality on theme detail page
+- Implement theme-specific leaderboards
+- Backend + frontend logic
+
+### P3 - Social Features
+- Real-time chat improvements
+- Push notifications
+- Friend system
+
+### P4 - Advanced Features
+- Auth Google/Apple
+- Player filters (age, distance)
+- Video support in posts
+- Deep Links
+- WebSocket matchmaking
+- Seasons system
+
+### P5 - Refactoring
+- Split server.py into modules (routes, models, etc.)
+- Clean legacy category code from category-detail.tsx
