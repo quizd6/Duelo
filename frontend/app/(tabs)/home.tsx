@@ -7,6 +7,7 @@ import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import DueloHeader from '../../components/DueloHeader';
+import { GlassIconFrame } from '../../components/GlassIconFrame';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 const GRID_PAD = 16;
@@ -39,9 +40,19 @@ type Category = {
   question_count: number;
 };
 
+type FeaturedTopic = {
+  id: string;
+  name: string;
+  icon: string;
+  icon_url: string;
+  category_id: string;
+  pillar_color: string;
+};
+
 export default function HomeScreen() {
   const router = useRouter();
   const [categories, setCategories] = useState<Category[]>([]);
+  const [featuredTopics, setFeaturedTopics] = useState<FeaturedTopic[]>([]);
   const [loading, setLoading] = useState(true);
   const [pseudo, setPseudo] = useState('');
 
@@ -54,9 +65,27 @@ export default function HomeScreen() {
     if (storedPseudo) setPseudo(storedPseudo);
 
     try {
-      const res = await fetch(`${API_URL}/api/categories`);
-      const data = await res.json();
-      setCategories(data);
+      const [catRes, themesRes] = await Promise.all([
+        fetch(`${API_URL}/api/categories`),
+        fetch(`${API_URL}/api/themes/explore`),
+      ]);
+      const catData = await catRes.json();
+      setCategories(catData);
+
+      const themesData = await themesRes.json();
+      // Extract all topics from all pillars
+      const topics: FeaturedTopic[] = [];
+      for (const pillar of (themesData.pillars || [])) {
+        for (const theme of (pillar.themes || [])) {
+          for (const topic of (theme.topics || [])) {
+            topics.push({
+              ...topic,
+              pillar_color: pillar.color,
+            });
+          }
+        }
+      }
+      setFeaturedTopics(topics);
     } catch {}
     setLoading(false);
   };
@@ -76,6 +105,44 @@ export default function HomeScreen() {
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Text style={styles.greeting}>Salut, {pseudo || 'Joueur'} 👋</Text>
+
+        {/* Featured Topics */}
+        {featuredTopics.length > 0 && (
+          <View style={styles.featuredSection}>
+            <Text style={styles.sectionTitle}>À LA UNE</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.featuredScroll}
+            >
+              {featuredTopics.map((topic) => (
+                <TouchableOpacity
+                  key={topic.id}
+                  style={styles.featuredCard}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    router.push(`/category-detail?id=${topic.category_id}`);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.featuredCardInner, { borderColor: topic.pillar_color + '25' }]}>
+                    <View style={[styles.featuredGlow, { backgroundColor: topic.pillar_color + '06', shadowColor: topic.pillar_color }]} />
+                    <GlassIconFrame
+                      iconUrl={topic.icon_url || undefined}
+                      emoji={!topic.icon_url ? topic.icon : undefined}
+                      size={60}
+                      pillarColor={topic.pillar_color}
+                      progress={0}
+                      showRing={true}
+                    />
+                    <Text style={styles.featuredName} numberOfLines={2}>{topic.name}</Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
         <Text style={styles.sectionTitle}>CHOISIS TA CATÉGORIE</Text>
 
         <View style={styles.categoriesGrid}>
@@ -110,18 +177,34 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000' },
   loadingContainer: { flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' },
-  scroll: { paddingHorizontal: GRID_PAD, paddingBottom: 30 },
+  scroll: { paddingBottom: 30 },
 
-  greeting: { fontSize: 22, fontWeight: '800', color: '#FFF', marginTop: 20, marginBottom: 24 },
+  greeting: { fontSize: 22, fontWeight: '800', color: '#FFF', marginTop: 20, marginBottom: 24, paddingHorizontal: GRID_PAD },
 
   sectionTitle: {
     fontSize: 12, fontWeight: '800', color: '#525252', letterSpacing: 3,
-    marginBottom: 16,
+    marginBottom: 16, paddingHorizontal: GRID_PAD,
   },
+
+  // Featured topics
+  featuredSection: { marginBottom: 24 },
+  featuredScroll: { paddingHorizontal: 12, gap: 10 },
+  featuredCard: { width: 120 },
+  featuredCardInner: {
+    width: '100%', borderRadius: 18, padding: 12,
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderWidth: 1, alignItems: 'center', minHeight: 140,
+    overflow: 'hidden',
+  },
+  featuredGlow: {
+    position: 'absolute', top: -20, left: -20, right: -20, height: 70,
+    shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.2, shadowRadius: 20,
+  },
+  featuredName: { color: '#FFF', fontSize: 12, fontWeight: '700', textAlign: 'center', marginTop: 8, lineHeight: 15 },
 
   // Grid
   categoriesGrid: {
-    flexDirection: 'row', flexWrap: 'wrap',
+    flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: GRID_PAD,
   },
   categoryCard: {
     width: '25%', padding: 5,

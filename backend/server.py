@@ -2547,73 +2547,75 @@ PILLARS_DATA = [
     {
         "id": "screen", "name": "SCREEN", "label": "Cinéma & Séries", "color": "#8B5CF6",
         "icon": "🎬", "themes": [
-            {"id": "series_tv", "name": "Séries TV Cultes", "icon": "📺", "playable": True},
-            {"id": "cinema", "name": "Cinéma", "icon": "🎬", "playable": True},
-            {"id": "animation", "name": "Animation", "icon": "🎨", "playable": False},
+            {"id": "series_tv", "name": "Séries TV Cultes", "icon": "📺", "playable": True, "topics": [
+                {"id": "breaking_bad", "name": "Breaking Bad", "icon_url": "https://customer-assets.emergentagent.com/job_duelo-quiz-1/artifacts/1hmg9970_BBAD.png", "icon": "🧪"},
+            ]},
+            {"id": "cinema", "name": "Cinéma", "icon": "🎬", "playable": True, "topics": []},
+            {"id": "animation", "name": "Animation", "icon": "🎨", "playable": False, "topics": []},
         ]
     },
     {
         "id": "sound", "name": "SOUND", "label": "Musique & Audio", "color": "#6366F1",
         "icon": "🎵", "themes": [
-            {"id": "musique", "name": "Musique", "icon": "🎵", "playable": True},
-            {"id": "rap_hiphop", "name": "Rap & Hip-Hop", "icon": "🎤", "playable": False},
-            {"id": "classique", "name": "Musique Classique", "icon": "🎻", "playable": False},
+            {"id": "musique", "name": "Musique", "icon": "🎵", "playable": True, "topics": []},
+            {"id": "rap_hiphop", "name": "Rap & Hip-Hop", "icon": "🎤", "playable": False, "topics": []},
+            {"id": "classique", "name": "Musique Classique", "icon": "🎻", "playable": False, "topics": []},
         ]
     },
     {
         "id": "lab", "name": "LAB", "label": "Sciences & Espace", "color": "#06B6D4",
         "icon": "🔬", "themes": [
-            {"id": "sciences", "name": "Sciences", "icon": "🔬", "playable": True},
-            {"id": "espace", "name": "Espace", "icon": "🚀", "playable": False},
-            {"id": "technologie", "name": "Technologie", "icon": "💻", "playable": False},
+            {"id": "sciences", "name": "Sciences", "icon": "🔬", "playable": True, "topics": []},
+            {"id": "espace", "name": "Espace", "icon": "🚀", "playable": False, "topics": []},
+            {"id": "technologie", "name": "Technologie", "icon": "💻", "playable": False, "topics": []},
         ]
     },
     {
         "id": "arena", "name": "ARENA", "label": "Sports & Gaming", "color": "#84CC16",
         "icon": "⚽", "themes": [
-            {"id": "sport", "name": "Sport", "icon": "⚽", "playable": True},
-            {"id": "gaming", "name": "🎮 Gaming", "icon": "🎮", "playable": False},
-            {"id": "jeux_olympiques", "name": "Jeux Olympiques", "icon": "🏅", "playable": False},
+            {"id": "sport", "name": "Sport", "icon": "⚽", "playable": True, "topics": []},
+            {"id": "gaming", "name": "🎮 Gaming", "icon": "🎮", "playable": False, "topics": []},
+            {"id": "jeux_olympiques", "name": "Jeux Olympiques", "icon": "🏅", "playable": False, "topics": []},
         ]
     },
     {
         "id": "legends", "name": "LEGENDS", "label": "Histoire & Mythes", "color": "#F59E0B",
         "icon": "🏛️", "themes": [
-            {"id": "histoire", "name": "Histoire de France", "icon": "🏛️", "playable": True},
-            {"id": "antiquite", "name": "Antiquité", "icon": "⚔️", "playable": False},
-            {"id": "mythologie", "name": "Mythologie", "icon": "🐉", "playable": False},
+            {"id": "histoire", "name": "Histoire de France", "icon": "🏛️", "playable": True, "topics": []},
+            {"id": "antiquite", "name": "Antiquité", "icon": "⚔️", "playable": False, "topics": []},
+            {"id": "mythologie", "name": "Mythologie", "icon": "🐉", "playable": False, "topics": []},
         ]
     },
     {
         "id": "globe", "name": "GLOBE", "label": "Voyage & Géo", "color": "#F97316",
         "icon": "🌍", "themes": [
-            {"id": "geographie", "name": "Géographie Mondiale", "icon": "🌍", "playable": True},
-            {"id": "capitales", "name": "Capitales du Monde", "icon": "🏙️", "playable": False},
-            {"id": "drapeaux", "name": "Drapeaux", "icon": "🏳️", "playable": False},
+            {"id": "geographie", "name": "Géographie Mondiale", "icon": "🌍", "playable": True, "topics": []},
+            {"id": "capitales", "name": "Capitales du Monde", "icon": "🏙️", "playable": False, "topics": []},
+            {"id": "drapeaux", "name": "Drapeaux", "icon": "🏳️", "playable": False, "topics": []},
         ]
     },
     {
         "id": "art", "name": "ART", "label": "Mode & Design", "color": "#D946EF",
         "icon": "🎨", "themes": [
-            {"id": "mode", "name": "Mode", "icon": "👗", "playable": False},
-            {"id": "art_peinture", "name": "Art & Peinture", "icon": "🖼️", "playable": False},
-            {"id": "architecture", "name": "Architecture", "icon": "🏗️", "playable": False},
+            {"id": "mode", "name": "Mode", "icon": "👗", "playable": False, "topics": []},
+            {"id": "art_peinture", "name": "Art & Peinture", "icon": "🖼️", "playable": False, "topics": []},
+            {"id": "architecture", "name": "Architecture", "icon": "🏗️", "playable": False, "topics": []},
         ]
     },
     {
         "id": "mind", "name": "MIND", "label": "Culture & Savoir", "color": "#3B82F6",
         "icon": "📖", "themes": [
-            {"id": "litterature", "name": "Littérature", "icon": "📚", "playable": False},
-            {"id": "philosophie", "name": "Philosophie", "icon": "🤔", "playable": False},
-            {"id": "langue_fr", "name": "Langue Française", "icon": "🇫🇷", "playable": False},
+            {"id": "litterature", "name": "Littérature", "icon": "📚", "playable": False, "topics": []},
+            {"id": "philosophie", "name": "Philosophie", "icon": "🤔", "playable": False, "topics": []},
+            {"id": "langue_fr", "name": "Langue Française", "icon": "🇫🇷", "playable": False, "topics": []},
         ]
     },
     {
         "id": "life", "name": "LIFE", "label": "Nature & Animaux", "color": "#10B981",
         "icon": "🌿", "themes": [
-            {"id": "gastronomie", "name": "Gastronomie", "icon": "🍽️", "playable": True},
-            {"id": "animaux", "name": "Animaux", "icon": "🐾", "playable": False},
-            {"id": "nature", "name": "Nature", "icon": "🌳", "playable": False},
+            {"id": "gastronomie", "name": "Gastronomie", "icon": "🍽️", "playable": True, "topics": []},
+            {"id": "animaux", "name": "Animaux", "icon": "🐾", "playable": False, "topics": []},
+            {"id": "nature", "name": "Nature", "icon": "🌳", "playable": False, "topics": []},
         ]
     },
 ]
@@ -2641,7 +2643,18 @@ async def themes_explore(user_id: Optional[str] = None, db: AsyncSession = Depen
                 "title_lvl50": "",
                 "xp_progress": {"current": 0, "needed": 500, "progress": 0.0},
                 "total_questions": 0,
+                "topics": [],
             }
+
+            # Add topics with icon_url
+            for topic in theme.get("topics", []):
+                theme_data["topics"].append({
+                    "id": topic["id"],
+                    "name": topic["name"],
+                    "icon": topic.get("icon", ""),
+                    "icon_url": topic.get("icon_url", ""),
+                    "category_id": theme["id"],
+                })
 
             # If playable, get real data
             xp_field = CATEGORY_XP_FIELD.get(theme["id"])

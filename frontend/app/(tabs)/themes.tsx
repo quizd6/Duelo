@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator,
-  Dimensions, FlatList, Modal, Pressable, Platform, useWindowDimensions,
+  Dimensions, FlatList, Modal, Pressable, Platform, useWindowDimensions, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -15,6 +15,7 @@ import Animated, {
 import Svg, { Circle } from 'react-native-svg';
 import { BlurView } from 'expo-blur';
 import DueloHeader from '../../components/DueloHeader';
+import { GlassIconFrame } from '../../components/GlassIconFrame';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
@@ -23,11 +24,16 @@ const CARD_H = 170;
 const GRID_CARD_W = Math.floor((SCREEN_W - 48 - 16) / 3);
 
 // ── Types ──
+type TopicData = {
+  id: string; name: string; icon: string; icon_url: string; category_id: string;
+};
+
 type ThemeData = {
   id: string; name: string; icon: string; playable: boolean;
   level: number; xp: number; title: string; title_lvl50: string;
   xp_progress: { current: number; needed: number; progress: number };
   total_questions: number;
+  topics: TopicData[];
 };
 
 type PillarData = {
@@ -111,28 +117,15 @@ const ThemeCard = ({ theme, pillarColor, onPress, onLongPress }: {
         { borderColor: isLocked ? '#222' : pillarColor + '30' },
         isLocked && styles.themeCardLocked,
       ]}>
-        {/* Progress Ring */}
-        <View style={styles.ringWrap}>
-          {!isLocked && (
-            <ProgressRing
-              progress={progress}
-              color={pillarColor}
-              size={72}
-              strokeWidth={3}
-            />
-          )}
-          <View style={[
-            styles.iconCircle,
-            { backgroundColor: isLocked ? '#111' : pillarColor + '15' },
-          ]}>
-            <Text style={[
-              styles.themeIcon,
-              isLocked && { opacity: 0.3 },
-            ]}>
-              {theme.icon}
-            </Text>
-          </View>
-        </View>
+        {/* GlassIconFrame */}
+        <GlassIconFrame
+          emoji={theme.icon}
+          size={64}
+          pillarColor={pillarColor}
+          progress={progress}
+          showRing={!isLocked}
+          locked={isLocked}
+        />
 
         {/* Name */}
         <Text style={[
@@ -163,6 +156,38 @@ const ThemeCard = ({ theme, pillarColor, onPress, onLongPress }: {
             {theme.title}
           </Text>
         ) : null}
+      </View>
+    </TouchableOpacity>
+  );
+};
+
+// ── Topic Card (Individual themes like Breaking Bad) ──
+const TopicCardItem = ({ topic, pillarColor, onPress }: {
+  topic: TopicData; pillarColor: string; onPress: () => void;
+}) => {
+  return (
+    <TouchableOpacity
+      style={styles.topicCard}
+      onPress={onPress}
+      activeOpacity={0.7}
+    >
+      <View style={[styles.topicCardInner, { borderColor: pillarColor + '25' }]}>
+        {/* Subtle glow */}
+        <View style={[styles.topicGlow, {
+          backgroundColor: pillarColor + '06',
+          shadowColor: pillarColor,
+        }]} />
+
+        <GlassIconFrame
+          iconUrl={topic.icon_url || undefined}
+          emoji={!topic.icon_url ? topic.icon : undefined}
+          size={68}
+          pillarColor={pillarColor}
+          progress={0}
+          showRing={true}
+        />
+
+        <Text style={styles.topicName} numberOfLines={2}>{topic.name}</Text>
       </View>
     </TouchableOpacity>
   );
@@ -443,6 +468,38 @@ export default function ThemesScreen() {
                 ))}
               </View>
             )}
+          </Animated.View>
+        )}
+
+        {/* ── TOPICS CAROUSEL (Individual themes with icon_url) ── */}
+        {currentPillar && currentPillar.themes.some(t => t.topics && t.topics.length > 0) && (
+          <Animated.View entering={FadeInDown.delay(200).springify()}>
+            {currentPillar.themes.filter(t => t.topics && t.topics.length > 0).map((theme) => (
+              <View key={`topics-${theme.id}`}>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>
+                    {theme.icon} {theme.name}
+                  </Text>
+                </View>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.carouselScroll}
+                >
+                  {theme.topics.map((topic: TopicData) => (
+                    <TopicCardItem
+                      key={topic.id}
+                      topic={topic}
+                      pillarColor={currentColor}
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                        router.push(`/category-detail?id=${topic.category_id}`);
+                      }}
+                    />
+                  ))}
+                </ScrollView>
+              </View>
+            ))}
           </Animated.View>
         )}
 
@@ -841,6 +898,40 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginTop: 3,
     textAlign: 'center',
+  },
+
+  // Topic Card (individual themes with icon_url)
+  topicCard: {
+    width: CARD_W,
+  },
+  topicCardInner: {
+    width: '100%',
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderWidth: 1,
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+    minHeight: CARD_H,
+    overflow: 'hidden',
+  },
+  topicGlow: {
+    position: 'absolute',
+    top: -20,
+    left: -20,
+    right: -20,
+    height: 80,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+  },
+  topicName: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFF',
+    textAlign: 'center',
+    marginTop: 8,
+    lineHeight: 15,
   },
 
   // Grid
