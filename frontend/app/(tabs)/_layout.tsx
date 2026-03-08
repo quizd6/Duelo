@@ -104,8 +104,8 @@ const styles = StyleSheet.create({
   },
   tabItem: { alignItems: 'center', justifyContent: 'center', paddingTop: 4, minWidth: 56 },
   tabIconImage: {
-    width: 26,
-    height: 26,
+    width: 36,
+    height: 36,
   },
   tabLabel: { fontSize: 9, color: '#525252', marginTop: 3, fontWeight: '600' },
   tabLabelActive: { color: '#8A2BE2' },
@@ -127,7 +127,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.8, shadowRadius: 16,
   },
   playTabIconImage: {
-    width: 30,
-    height: 30,
+    width: 38,
+    height: 38,
   },
 });

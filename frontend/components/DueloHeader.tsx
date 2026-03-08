@@ -132,8 +132,8 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   headerIcon: {
-    width: 28,
-    height: 28,
+    width: 40,
+    height: 40,
   },
   logoContainer: {
     flex: 1,
@@ -141,7 +141,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   logoImage: {
-    width: 120,
+    width: 140,
     height: 36,
   },
   rightIcons: {
