@@ -18,7 +18,7 @@ function TabIcon({ label, focused, iconSource }: { label: string; focused: boole
         source={iconSource}
         style={[
           styles.tabIconImage,
-          { opacity: focused ? 1 : 0.55 },
+          focused ? styles.tabIconFocused : styles.tabIconInactive,
         ]}
         resizeMode="contain"
       />
@@ -113,8 +113,16 @@ const styles = StyleSheet.create({
   },
   tabItem: { alignItems: 'center', justifyContent: 'center', paddingTop: 4, minWidth: 56 },
   tabIconImage: {
-    width: 36,
-    height: 36,
+    width: 32,
+    height: 32,
+  },
+  tabIconFocused: {
+    width: 40,
+    height: 40,
+  },
+  tabIconInactive: {
+    width: 30,
+    height: 30,
   },
   tabLabel: {
     fontSize: 9,
