@@ -16,10 +16,7 @@ function TabIcon({ label, focused, iconSource }: { label: string; focused: boole
     <View style={styles.tabItem}>
       <Image
         source={iconSource}
-        style={[
-          styles.tabIconImage,
-          focused ? styles.tabIconFocused : styles.tabIconInactive,
-        ]}
+        style={styles.tabIconImage}
         resizeMode="contain"
       />
       <Text style={[styles.tabLabel, focused && styles.tabLabelActive]} numberOfLines={1}>{label}</Text>
@@ -113,16 +110,8 @@ const styles = StyleSheet.create({
   },
   tabItem: { alignItems: 'center', justifyContent: 'center', paddingTop: 4, minWidth: 56 },
   tabIconImage: {
-    width: 32,
-    height: 32,
-  },
-  tabIconFocused: {
     width: 40,
     height: 40,
-  },
-  tabIconInactive: {
-    width: 30,
-    height: 30,
   },
   tabLabel: {
     fontSize: 9,
