@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { View, Text, Image, StyleSheet, Platform, TouchableOpacity, Dimensions, useWindowDimensions } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import Animated, {
   useSharedValue, useAnimatedStyle, withSpring, withTiming,
@@ -8,6 +8,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useRouter, usePathname, Slot } from 'expo-router';
 import { GLASS } from '../../theme/glassTheme';
+import DueloHeader from '../../components/DueloHeader';
 
 // Import screen components directly for the pager
 import AccueilScreen from './accueil';
@@ -167,6 +168,11 @@ export default function TabLayout() {
         <Slot />
       </View>
 
+      {/* Fixed header - stays in place during swipe */}
+      <SafeAreaView style={styles.safeTop} edges={['top']}>
+        <DueloHeader />
+      </SafeAreaView>
+
       {/* Custom swipeable pager */}
       <View style={styles.pagerContainer}>
         <GestureDetector gesture={panGesture}>
@@ -196,6 +202,9 @@ const styles = StyleSheet.create({
     height: 1,
     overflow: 'hidden',
     opacity: 0,
+  },
+  safeTop: {
+    backgroundColor: GLASS.bgDark,
   },
   pagerContainer: {
     flex: 1,

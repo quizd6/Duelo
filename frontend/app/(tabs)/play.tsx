@@ -76,8 +76,7 @@ export default function PlayScreen() {
 
   return (
     <CosmicBackground>
-      <SafeAreaView style={styles.container}>
-        <DueloHeader />
+      <View style={styles.container}>
 
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Text style={styles.greeting}>Salut, {pseudo || 'Joueur'} 👋</Text>
@@ -144,7 +143,7 @@ export default function PlayScreen() {
 
         <View style={{ height: 30 }} />
       </ScrollView>
-      </SafeAreaView>
+      </View>
     </CosmicBackground>
   );
 }

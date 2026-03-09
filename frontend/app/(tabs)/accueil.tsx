@@ -429,20 +429,18 @@ export default function AccueilScreen() {
   if (loading) {
     return (
       <CosmicBackground>
-      <SafeAreaView style={styles.container}>
-        <DueloHeader />
+      <View style={styles.container}>
         <View style={styles.loadingWrap}>
           <ActivityIndicator size="large" color="#8A2BE2" />
         </View>
-      </SafeAreaView>
+      </View>
       </CosmicBackground>
     );
   }
 
   return (
     <CosmicBackground>
-    <SafeAreaView style={styles.container}>
-      <DueloHeader />
+    <View style={styles.container}>
 
       <ScrollView
         style={styles.scrollView}
@@ -576,7 +574,7 @@ export default function AccueilScreen() {
         {/* Bottom spacing */}
         <View style={{ height: 32 }} />
       </ScrollView>
-    </SafeAreaView>
+    </View>
     </CosmicBackground>
   );
 }

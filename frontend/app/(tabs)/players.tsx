@@ -483,8 +483,7 @@ export default function PlayersScreen() {
 
   return (
     <CosmicBackground>
-    <SafeAreaView style={s.container}>
-      <DueloHeader />
+    <View style={s.container}>
 
       {/* Section Navigator */}
       <View style={s.sectionNav}>
@@ -718,7 +717,7 @@ export default function PlayersScreen() {
           <View style={{ height: 80 }} />
         </ScrollView>
       )}
-    </SafeAreaView>
+    </View>
     </CosmicBackground>
   );
 }

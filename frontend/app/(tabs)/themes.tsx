@@ -318,19 +318,17 @@ export default function ThemesScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <DueloHeader />
+      <View style={styles.container}>
         <View style={styles.loadCenter}>
           <ActivityIndicator size="large" color="#8B5CF6" />
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
     <CosmicBackground>
-    <SafeAreaView style={styles.container}>
-      <DueloHeader />
+    <View style={styles.container}>
 
       {/* Dynamic Background Glow */}
       <View style={[styles.bgGlow, { backgroundColor: currentColor + '08', pointerEvents: 'none' }]} />
@@ -646,7 +644,7 @@ export default function ThemesScreen() {
           </Pressable>
         </Pressable>
       </Modal>
-    </SafeAreaView>
+    </View>
     </CosmicBackground>
   );
 }

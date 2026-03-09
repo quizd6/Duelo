@@ -131,14 +131,14 @@ export default function ProfileScreen() {
   if (!profile || !profile.user) {
     return (
       <CosmicBackground>
-        <SafeAreaView style={s.container}>
+        <View style={s.container}>
         <View style={s.emptyContainer}>
           <Text style={s.emptyText}>Connecte-toi pour voir ton profil</Text>
           <TouchableOpacity style={s.loginBtn} onPress={() => router.replace('/')}>
             <Text style={s.loginBtnText}>Se connecter</Text>
           </TouchableOpacity>
         </View>
-      </SafeAreaView>
+      </View>
       </CosmicBackground>
     );
   }
@@ -148,8 +148,7 @@ export default function ProfileScreen() {
 
   return (
     <CosmicBackground>
-    <SafeAreaView style={s.container}>
-      <DueloHeader />
+    <View style={s.container}>
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
 
         {/* ── Profile Header: Avatar left + info right ── */}
@@ -386,7 +385,7 @@ export default function ProfileScreen() {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </View>
     </CosmicBackground>
   );
 }
