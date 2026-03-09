@@ -1,6 +1,9 @@
-import { Tabs } from 'expo-router';
+import { Tabs, useRouter } from 'expo-router';
 import { View, Text, Image, StyleSheet, Platform, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { GestureDetector, Gesture } from 'react-native-gesture-handler';
+import Animated, { runOnJS } from 'react-native-reanimated';
+import { useRef, useCallback } from 'react';
 import { GLASS } from '../../theme/glassTheme';
 
 // Tab icon assets
@@ -19,6 +22,8 @@ const TAB_CONFIG = [
   { name: 'themes', label: 'Thèmes', icon: TAB_ICONS.themes },
   { name: 'profile', label: 'Profil', icon: TAB_ICONS.profile },
 ];
+
+const TAB_NAMES = TAB_CONFIG.map(t => t.name);
 
 function CustomTabBar({ state, navigation }: any) {
   const insets = useSafeAreaInsets();
@@ -63,22 +68,62 @@ function CustomTabBar({ state, navigation }: any) {
 }
 
 export default function TabLayout() {
+  const router = useRouter();
+  const currentIndexRef = useRef(0);
+
+  const handleSwipe = useCallback((direction: 'left' | 'right') => {
+    const idx = currentIndexRef.current;
+    if (direction === 'left' && idx < TAB_NAMES.length - 1) {
+      const nextTab = TAB_NAMES[idx + 1];
+      router.navigate(`/(tabs)/${nextTab}` as any);
+    } else if (direction === 'right' && idx > 0) {
+      const prevTab = TAB_NAMES[idx - 1];
+      router.navigate(`/(tabs)/${prevTab}` as any);
+    }
+  }, [router]);
+
+  const swipeGesture = Gesture.Pan()
+    .activeOffsetX([-40, 40])
+    .failOffsetY([-15, 15])
+    .onEnd((event) => {
+      'worklet';
+      const isHorizontal = Math.abs(event.translationX) > Math.abs(event.translationY) * 1.5;
+      const hasEnoughDistance = Math.abs(event.translationX) > 60;
+      const hasEnoughVelocity = Math.abs(event.velocityX) > 300;
+
+      if (isHorizontal && (hasEnoughDistance || hasEnoughVelocity)) {
+        if (event.translationX < 0) {
+          runOnJS(handleSwipe)('left');
+        } else {
+          runOnJS(handleSwipe)('right');
+        }
+      }
+    });
+
   return (
-    <Tabs
-      tabBar={(props) => <CustomTabBar {...props} />}
-      screenOptions={{
-        headerShown: false,
-        lazy: true,
-        sceneStyle: { backgroundColor: '#050510' },
-      }}
-    >
-      <Tabs.Screen name="accueil" />
-      <Tabs.Screen name="players" />
-      <Tabs.Screen name="play" />
-      <Tabs.Screen name="themes" />
-      <Tabs.Screen name="profile" />
-      <Tabs.Screen name="leaderboard" options={{ href: null }} />
-    </Tabs>
+    <GestureDetector gesture={swipeGesture}>
+      <Animated.View style={{ flex: 1 }}>
+        <Tabs
+          tabBar={(props) => {
+            // Track current index for swipe handler
+            currentIndexRef.current = props.state.index;
+            return <CustomTabBar {...props} />;
+          }}
+          screenOptions={{
+            headerShown: false,
+            lazy: true,
+            sceneStyle: { backgroundColor: '#050510' },
+          }}
+        >
+          <Tabs.Screen name="accueil" />
+          <Tabs.Screen name="players" />
+          <Tabs.Screen name="play" />
+          <Tabs.Screen name="themes" />
+          <Tabs.Screen name="profile" />
+          <Tabs.Screen name="leaderboard" options={{ href: null }} />
+        </Tabs>
+      </Animated.View>
+    </GestureDetector>
   );
 }
 
