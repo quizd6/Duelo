@@ -1,5 +1,6 @@
 import { Tabs } from 'expo-router';
 import { View, Text, Image, StyleSheet, Platform, TouchableOpacity } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GLASS } from '../../theme/glassTheme';
 
 // Tab icon assets
@@ -11,31 +12,52 @@ const TAB_ICONS = {
   profile: require('../../assets/tabs/profile.webp'),
 };
 
-function TabIcon({ label, focused, iconSource }: { label: string; focused: boolean; iconSource: any }) {
-  return (
-    <View style={styles.tabItem}>
-      <Image
-        source={iconSource}
-        style={styles.tabIconImage}
-        resizeMode="contain"
-      />
-      <Text style={[styles.tabLabel, focused && styles.tabLabelActive]} numberOfLines={1}>{label}</Text>
-      {focused && <View style={styles.activeIndicator} />}
-    </View>
-  );
-}
+const TAB_CONFIG = [
+  { name: 'accueil', label: 'Accueil', icon: TAB_ICONS.home },
+  { name: 'players', label: 'Social', icon: TAB_ICONS.social },
+  { name: 'home', label: 'Jouer', icon: TAB_ICONS.play, isCenter: true },
+  { name: 'themes', label: 'Thèmes', icon: TAB_ICONS.themes },
+  { name: 'profile', label: 'Profil', icon: TAB_ICONS.profile },
+];
 
-function PlayTabIcon({ focused }: { focused: boolean }) {
+function CustomTabBar({ state, navigation }: any) {
+  const insets = useSafeAreaInsets();
+
   return (
-    <View style={styles.playTabWrap}>
-      <View style={[styles.playTabCircle, focused && styles.playTabCircleActive]}>
-        <Image
-          source={TAB_ICONS.play}
-          style={styles.playTabIconImage}
-          resizeMode="contain"
-        />
-      </View>
-      <Text style={[styles.tabLabel, focused && styles.tabLabelActive, { marginTop: 4 }]}>Jouer</Text>
+    <View style={[styles.tabBar, { paddingBottom: insets.bottom > 0 ? insets.bottom : 8 }]}>
+      {TAB_CONFIG.map((tab, index) => {
+        const isFocused = state.index === index;
+
+        const onPress = () => {
+          const event = navigation.emit({
+            type: 'tabPress',
+            target: state.routes[index]?.key,
+            canPreventDefault: true,
+          });
+          if (!isFocused && !event.defaultPrevented) {
+            navigation.navigate(state.routes[index]?.name);
+          }
+        };
+
+        if (tab.isCenter) {
+          return (
+            <TouchableOpacity key={tab.name} style={styles.playTabWrap} onPress={onPress} activeOpacity={1}>
+              <View style={[styles.playTabCircle, isFocused && styles.playTabCircleActive]}>
+                <Image source={tab.icon} style={styles.playTabIconImage} resizeMode="contain" />
+              </View>
+              <Text style={[styles.tabLabel, isFocused && styles.tabLabelActive]}>{tab.label}</Text>
+            </TouchableOpacity>
+          );
+        }
+
+        return (
+          <TouchableOpacity key={tab.name} style={styles.tabItem} onPress={onPress} activeOpacity={1}>
+            <Image source={tab.icon} style={styles.tabIconImage} resizeMode="contain" />
+            <Text style={[styles.tabLabel, isFocused && styles.tabLabelActive]}>{tab.label}</Text>
+            {isFocused && <View style={styles.activeIndicator} />}
+          </TouchableOpacity>
+        );
+      })}
     </View>
   );
 }
@@ -43,71 +65,31 @@ function PlayTabIcon({ focused }: { focused: boolean }) {
 export default function TabLayout() {
   return (
     <Tabs
+      tabBar={(props) => <CustomTabBar {...props} />}
       screenOptions={{
         headerShown: false,
-        tabBarStyle: styles.tabBar,
-        tabBarShowLabel: false,
-        tabBarActiveTintColor: '#00FFFF',
-        tabBarInactiveTintColor: '#00FFFF',
-        tabBarItemStyle: { opacity: 1 },
-        tabBarButton: (props) => (
-          <TouchableOpacity
-            {...props}
-            activeOpacity={1}
-            style={[props.style, { opacity: 1 }]}
-          />
-        ),
         sceneStyle: { backgroundColor: 'transparent' },
       }}
     >
-      <Tabs.Screen
-        name="accueil"
-        options={{
-          tabBarIcon: ({ focused }) => <TabIcon label="Accueil" focused={focused} iconSource={TAB_ICONS.home} />,
-        }}
-      />
-      <Tabs.Screen
-        name="players"
-        options={{
-          tabBarIcon: ({ focused }) => <TabIcon label="Social" focused={focused} iconSource={TAB_ICONS.social} />,
-        }}
-      />
-      <Tabs.Screen
-        name="home"
-        options={{
-          tabBarIcon: ({ focused }) => <PlayTabIcon focused={focused} />,
-        }}
-      />
-      <Tabs.Screen
-        name="themes"
-        options={{
-          tabBarIcon: ({ focused }) => <TabIcon label="Thèmes" focused={focused} iconSource={TAB_ICONS.themes} />,
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          tabBarIcon: ({ focused }) => <TabIcon label="Profil" focused={focused} iconSource={TAB_ICONS.profile} />,
-        }}
-      />
-      <Tabs.Screen
-        name="leaderboard"
-        options={{
-          href: null,
-        }}
-      />
+      <Tabs.Screen name="accueil" />
+      <Tabs.Screen name="players" />
+      <Tabs.Screen name="home" />
+      <Tabs.Screen name="themes" />
+      <Tabs.Screen name="profile" />
+      <Tabs.Screen name="leaderboard" options={{ href: null }} />
     </Tabs>
   );
 }
 
 const styles = StyleSheet.create({
   tabBar: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-around',
     backgroundColor: GLASS.bgDark,
     borderTopWidth: 1,
     borderTopColor: GLASS.borderCyan,
-    height: Platform.OS === 'ios' ? 88 : 68,
     paddingTop: 8,
-    elevation: 0,
     ...Platform.select({
       web: {
         backdropFilter: 'blur(20px)',
@@ -116,7 +98,12 @@ const styles = StyleSheet.create({
       default: {},
     }),
   },
-  tabItem: { alignItems: 'center', justifyContent: 'center', paddingTop: 4, minWidth: 56 },
+  tabItem: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 4,
+    minWidth: 56,
+  },
   tabIconImage: {
     width: 40,
     height: 40,
@@ -136,7 +123,11 @@ const styles = StyleSheet.create({
     shadowColor: '#00FFFF', shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.8, shadowRadius: 6,
   },
-  playTabWrap: { alignItems: 'center', justifyContent: 'center', marginTop: -12 },
+  playTabWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: -12,
+  },
   playTabCircle: {
     width: 52, height: 52, borderRadius: 26,
     backgroundColor: '#8A2BE2', justifyContent: 'center', alignItems: 'center',
