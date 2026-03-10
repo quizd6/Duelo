@@ -9,6 +9,7 @@ import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { GLASS } from '../theme/glassTheme';
+import SwipeBackPage from '../components/SwipeBackPage';
 
 const { width } = Dimensions.get('window');
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
@@ -351,6 +352,7 @@ export default function SearchScreen() {
   const showTrendingSection = !searchQuery.trim() && activeTab === 'themes';
 
   return (
+    <SwipeBackPage>
     <SafeAreaView style={st.container}>
       {/* Header */}
       <View style={st.header}>
@@ -596,6 +598,7 @@ export default function SearchScreen() {
         )}
       </KeyboardAvoidingView>
     </SafeAreaView>
+    </SwipeBackPage>
   );
 }
 

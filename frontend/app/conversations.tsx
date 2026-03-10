@@ -10,6 +10,7 @@ import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import CosmicBackground from '../components/CosmicBackground';
 import { GLASS } from '../theme/glassTheme';
+import SwipeBackPage from '../components/SwipeBackPage';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -178,6 +179,7 @@ export default function ConversationsScreen() {
   };
 
   return (
+    <SwipeBackPage>
     <CosmicBackground>
       <SafeAreaView style={styles.container}>
         {/* Header */}
@@ -264,6 +266,7 @@ export default function ConversationsScreen() {
         )}
       </SafeAreaView>
     </CosmicBackground>
+    </SwipeBackPage>
   );
 }
 
