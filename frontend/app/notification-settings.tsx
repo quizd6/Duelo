@@ -7,6 +7,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
+import SwipeBackPage from '../components/SwipeBackPage';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
@@ -149,6 +150,7 @@ export default function NotificationSettingsScreen() {
   const allDisabled = Object.values(settings).every(v => !v);
 
   return (
+    <SwipeBackPage>
     <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Header */}
       <View style={styles.header}>
@@ -229,6 +231,7 @@ export default function NotificationSettingsScreen() {
         </ScrollView>
       )}
     </View>
+    </SwipeBackPage>
   );
 }
 

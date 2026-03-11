@@ -10,6 +10,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { GLASS } from '../theme/glassTheme';
+import SwipeBackPage from '../components/SwipeBackPage';
 
 const { width } = Dimensions.get('window');
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
@@ -283,6 +284,7 @@ export default function CategoryDetailScreen() {
   if (!detail) return null;
 
   return (
+    <SwipeBackPage>
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView
@@ -561,6 +563,7 @@ export default function CategoryDetailScreen() {
         </View>
       </Modal>
     </SafeAreaView>
+    </SwipeBackPage>
   );
 }
 

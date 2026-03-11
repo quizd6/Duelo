@@ -7,6 +7,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { GLASS } from '../theme/glassTheme';
+import SwipeBackPage from '../components/SwipeBackPage';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 
@@ -143,6 +144,7 @@ export default function ResultsScreen() {
   };
 
   return (
+    <SwipeBackPage>
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
         {/* Result Header */}
@@ -272,6 +274,7 @@ export default function ResultsScreen() {
         </Modal>
       )}
     </SafeAreaView>
+    </SwipeBackPage>
   );
 }
 

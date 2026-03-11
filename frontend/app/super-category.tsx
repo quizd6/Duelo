@@ -8,6 +8,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { GLASS } from '../theme/glassTheme';
+import SwipeBackPage from '../components/SwipeBackPage';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 const { width } = Dimensions.get('window');
@@ -99,6 +100,7 @@ export default function SuperCategoryScreen() {
   const accentColor = data.color || '#8A2BE2';
 
   return (
+    <SwipeBackPage>
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
@@ -183,6 +185,7 @@ export default function SuperCategoryScreen() {
         <View style={{ height: 40 }} />
       </Animated.ScrollView>
     </SafeAreaView>
+    </SwipeBackPage>
   );
 }
 

@@ -8,6 +8,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { GLASS } from '../theme/glassTheme';
+import SwipeBackPage from '../components/SwipeBackPage';
 
 const { width } = Dimensions.get('window');
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
@@ -126,6 +127,7 @@ export default function PlayerProfileScreen() {
     .sort((a, b) => b[1].level - a[1].level || b[1].xp - a[1].xp);
 
   return (
+    <SwipeBackPage>
     <SafeAreaView style={s.container}>
       <ScrollView
         contentContainerStyle={s.scroll}
@@ -275,6 +277,7 @@ export default function PlayerProfileScreen() {
         )}
       </ScrollView>
     </SafeAreaView>
+    </SwipeBackPage>
   );
 }
 

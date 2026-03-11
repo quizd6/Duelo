@@ -8,6 +8,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { GLASS } from '../theme/glassTheme';
+import SwipeBackPage from '../components/SwipeBackPage';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -303,6 +304,7 @@ export default function GameScreen() {
   const oneQPct = (1 / TOTAL_QUESTIONS) * 100; // ~14.3%
 
   return (
+    <SwipeBackPage>
     <View style={styles.container}>
       {/* ── Progress Bar (Question advancement, not timer) ── */}
       <View style={styles.progressBarBg}>
@@ -412,6 +414,7 @@ export default function GameScreen() {
         </View>
       </SafeAreaView>
     </View>
+    </SwipeBackPage>
   );
 }
 

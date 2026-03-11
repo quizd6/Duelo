@@ -4,11 +4,12 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import Animated, {
   useSharedValue, useAnimatedStyle, withSpring, withTiming,
-  runOnJS,
+  runOnJS, interpolate, Extrapolation,
 } from 'react-native-reanimated';
 import { useRouter, usePathname, Slot } from 'expo-router';
 import { GLASS } from '../../theme/glassTheme';
 import DueloHeader from '../../components/DueloHeader';
+import { useSwipeBackProgress } from '../../components/SwipeBackContext';
 
 // Import screen components directly for the pager
 import AccueilScreen from './accueil';
@@ -77,6 +78,7 @@ export default function TabLayout() {
   const currentIndex = useSharedValue(0);
   const [activeIndex, setActiveIndex] = useState(0);
   const [renderedPages, setRenderedPages] = useState<Set<number>>(new Set([0, 1]));
+  const swipeBackProgress = useSwipeBackProgress();
 
   // Pre-render adjacent pages when active index changes
   useEffect(() => {
@@ -161,8 +163,30 @@ export default function TabLayout() {
     lastSyncedPath.current = TAB_NAMES[index];
   }, [SCREEN_WIDTH]);
 
+  // Parallax: shift the tab content slightly left when a stack page is on top
+  // progress: 0 = normal (no page on top), 1 = page fully covering tabs
+  const parallaxStyle = useAnimatedStyle(() => {
+    if (!swipeBackProgress) return {};
+    const p = swipeBackProgress.value;
+    const shift = interpolate(
+      p,
+      [0, 1],
+      [0, -60],
+      Extrapolation.CLAMP,
+    );
+    const scale = interpolate(
+      p,
+      [0, 1],
+      [1, 0.94],
+      Extrapolation.CLAMP,
+    );
+    return {
+      transform: [{ translateX: shift }, { scale }],
+    };
+  });
+
   return (
-    <View style={styles.container}>
+    <Animated.View style={[styles.container, parallaxStyle]}>
       {/* Hidden Slot for expo-router compatibility */}
       <View style={styles.hiddenSlot} pointerEvents="none">
         <Slot />
@@ -187,7 +211,7 @@ export default function TabLayout() {
       </View>
 
       <CustomTabBar currentIndex={activeIndex} onTabPress={onTabPress} />
-    </View>
+    </Animated.View>
   );
 }
 

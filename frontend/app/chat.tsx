@@ -11,6 +11,7 @@ import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { GLASS } from '../theme/glassTheme';
+import SwipeBackPage from '../components/SwipeBackPage';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
@@ -317,6 +318,7 @@ export default function ChatScreen() {
   }
 
   return (
+    <SwipeBackPage>
     <SafeAreaView style={st.container}>
       {/* Premium Header */}
       <View style={st.header}>
@@ -425,6 +427,7 @@ export default function ChatScreen() {
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
+    </SwipeBackPage>
   );
 }
 

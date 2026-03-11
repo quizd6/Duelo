@@ -7,6 +7,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { GLASS } from '../theme/glassTheme';
+import SwipeBackPage from '../components/SwipeBackPage';
 
 const { width } = Dimensions.get('window');
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
@@ -245,6 +246,7 @@ export default function MatchmakingScreen() {
 
   // ── SEARCHING SCREEN ──
   return (
+    <SwipeBackPage>
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
         <Text style={styles.title}>RECHERCHE</Text>
@@ -273,6 +275,7 @@ export default function MatchmakingScreen() {
         <Text style={styles.hint}>Un adversaire sera trouvé sous peu...</Text>
       </View>
     </SafeAreaView>
+    </SwipeBackPage>
   );
 }
 

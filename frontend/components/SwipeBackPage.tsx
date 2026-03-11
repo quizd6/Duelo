@@ -11,8 +11,11 @@ import Animated, {
   Extrapolation,
 } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
+import * as Haptics from 'expo-haptics';
+import { useSwipeBackProgress } from './SwipeBackContext';
 
 const SPRING_CONFIG = { damping: 22, stiffness: 220, mass: 0.8 };
+const SWIPE_THRESHOLD_RATIO = 0.3;
 
 interface SwipeBackPageProps {
   children: React.ReactNode;
@@ -21,50 +24,88 @@ interface SwipeBackPageProps {
 export default function SwipeBackPage({ children }: SwipeBackPageProps) {
   const router = useRouter();
   const { width: SCREEN_WIDTH } = useWindowDimensions();
-  const translateX = useSharedValue(SCREEN_WIDTH); // Start off-screen (right)
+  const translateX = useSharedValue(SCREEN_WIDTH);
+  const parallaxProgress = useSwipeBackProgress();
+  const hasTriggeredHaptic = useSharedValue(false);
 
-  // Entry animation: slide in from the right
+  // Entry animation + parallax activation
+  // progress: 0 = no effect (tabs normal), 1 = page fully covering (tabs shifted)
   useEffect(() => {
     translateX.value = withTiming(0, { duration: 300 });
+    if (parallaxProgress) {
+      parallaxProgress.value = withTiming(1, { duration: 300 });
+    }
+    return () => {
+      if (parallaxProgress) {
+        parallaxProgress.value = 0;
+      }
+    };
   }, []);
+
+  const triggerHaptic = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
 
   const goBack = () => {
     router.back();
   };
 
   const panGesture = Gesture.Pan()
-    .activeOffsetX(20)       // Activate after 20px horizontal movement right
-    .failOffsetX(-10)        // Fail if user swipes left
-    .failOffsetY([-15, 15])  // Fail if user scrolls vertically
+    .activeOffsetX(20)
+    .failOffsetX(-10)
+    .failOffsetY([-15, 15])
+    .onStart(() => {
+      'worklet';
+      hasTriggeredHaptic.value = false;
+    })
     .onUpdate((e) => {
       'worklet';
-      // Only allow right swipe (positive translation)
-      translateX.value = Math.max(0, e.translationX);
+      const tx = Math.max(0, e.translationX);
+      translateX.value = tx;
+
+      // Parallax: 1 = fully covering, 0 = fully swiped away
+      const progress = 1 - (tx / SCREEN_WIDTH);
+      if (parallaxProgress) {
+        parallaxProgress.value = Math.max(0, progress);
+      }
+
+      // Haptic feedback at threshold
+      const threshold = SCREEN_WIDTH * SWIPE_THRESHOLD_RATIO;
+      if (tx > threshold && !hasTriggeredHaptic.value) {
+        hasTriggeredHaptic.value = true;
+        runOnJS(triggerHaptic)();
+      } else if (tx < threshold) {
+        hasTriggeredHaptic.value = false;
+      }
     })
     .onEnd((e) => {
       'worklet';
-      const threshold = SCREEN_WIDTH * 0.3;
+      const threshold = SCREEN_WIDTH * SWIPE_THRESHOLD_RATIO;
       if (
         e.translationX > threshold ||
         (e.translationX > 40 && e.velocityX > 500)
       ) {
-        // Swipe completed - slide page out and go back
+        // Swipe completed
         translateX.value = withTiming(SCREEN_WIDTH, { duration: 220 }, () => {
+          if (parallaxProgress) parallaxProgress.value = 0;
           runOnJS(goBack)();
         });
+        if (parallaxProgress) {
+          parallaxProgress.value = withTiming(0, { duration: 220 });
+        }
       } else {
-        // Swipe cancelled - spring back
+        // Swipe cancelled - back to covering
         translateX.value = withSpring(0, SPRING_CONFIG);
+        if (parallaxProgress) {
+          parallaxProgress.value = withSpring(1, SPRING_CONFIG);
+        }
       }
     });
 
-  // Page slides right following the finger
   const pageStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: translateX.value }],
   }));
 
-  // Semi-transparent overlay that dims the tab page behind
-  // Fades from dark (page covering tabs) to clear (tabs visible)
   const overlayStyle = useAnimatedStyle(() => ({
     opacity: interpolate(
       translateX.value,
@@ -76,10 +117,7 @@ export default function SwipeBackPage({ children }: SwipeBackPageProps) {
 
   return (
     <View style={styles.container}>
-      {/* Dark overlay on top of the visible tab page */}
       <Animated.View style={[styles.dimOverlay, overlayStyle]} pointerEvents="none" />
-
-      {/* Sliding page content */}
       <GestureDetector gesture={panGesture}>
         <Animated.View style={[styles.page, pageStyle]}>
           {children}
@@ -92,7 +130,7 @@ export default function SwipeBackPage({ children }: SwipeBackPageProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: 'transparent', // Transparent to show the tab page behind
+    backgroundColor: 'transparent',
   },
   dimOverlay: {
     ...StyleSheet.absoluteFillObject,
