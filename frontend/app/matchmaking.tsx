@@ -280,7 +280,7 @@ export default function MatchmakingScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: 'transparent' },
+  container: { flex: 1, backgroundColor: '#050510' },
   content: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 },
   title: { fontSize: 14, fontWeight: '800', color: '#525252', letterSpacing: 4, marginBottom: 8 },
   categoryLabel: { fontSize: 18, fontWeight: '700', color: '#FFF', marginBottom: 48 },

@@ -65,6 +65,7 @@ export default function ResultsScreen() {
   const [newLevel, setNewLevel] = useState<number | null>(null);
   const [showTitleModal, setShowTitleModal] = useState(false);
   const [submitting, setSubmitting] = useState(true);
+  const [playerPseudo, setPlayerPseudo] = useState('Joueur');
 
   // Report question states
   const [quizQuestions, setQuizQuestions] = useState<QuizQuestion[]>([]);
@@ -90,6 +91,7 @@ export default function ResultsScreen() {
   useEffect(() => {
     submitMatch();
     loadQuizQuestions();
+    loadPlayerPseudo();
     Haptics.notificationAsync(
       won ? Haptics.NotificationFeedbackType.Success : Haptics.NotificationFeedbackType.Error
     );
@@ -176,6 +178,13 @@ export default function ResultsScreen() {
     } catch {}
   };
 
+  const loadPlayerPseudo = async () => {
+    try {
+      const p = await AsyncStorage.getItem('duelo_pseudo');
+      if (p) setPlayerPseudo(p);
+    } catch {}
+  };
+
   const openReportModal = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setReportStep('select');
@@ -255,9 +264,9 @@ export default function ResultsScreen() {
           <View style={styles.scoreCardInner}>
             <View style={styles.playerColumn}>
               <View style={[styles.avatarCircle, styles.avatarPlayer]}>
-                <Text style={styles.avatarText}>T</Text>
+                <Text style={styles.avatarText}>{playerPseudo[0]?.toUpperCase()}</Text>
               </View>
-              <Text style={styles.playerName}>Toi</Text>
+              <Text style={styles.playerName}>{playerPseudo}</Text>
               <Text style={[styles.playerScore, won && styles.winScore]}>{pScore}</Text>
             </View>
             <View style={styles.vsContainer}>
@@ -490,7 +499,7 @@ export default function ResultsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: 'transparent' },
+  container: { flex: 1, backgroundColor: '#050510' },
   content: { flex: 1, justifyContent: 'center', paddingHorizontal: 24, paddingBottom: 16 },
   resultHeader: { alignItems: 'center', marginBottom: 20 },
   resultEmoji: { fontSize: 56, marginBottom: 8 },
