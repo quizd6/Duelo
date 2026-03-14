@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Animated, Dimensions,
-  Platform, UIManager
+  Platform, UIManager, ActivityIndicator, Easing
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -103,8 +103,13 @@ export default function GameScreen() {
   const [showResult, setShowResult] = useState(false);
   const [timeLeft, setTimeLeft] = useState(TIMER_DURATION);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [pseudo, setPseudo] = useState('Joueur');
   const [showPending, setShowPending] = useState(true);
+
+  // Loading spinner animation
+  const spinAnim = useRef(new Animated.Value(0)).current;
+  const pulseAnim = useRef(new Animated.Value(0.6)).current;
 
   // Score refs to avoid stale closures
   const playerScoreRef = useRef(0);
@@ -128,7 +133,25 @@ export default function GameScreen() {
   useEffect(() => {
     loadPseudo();
     fetchQuestions();
-    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+    // Start loading animation
+    const spin = Animated.loop(
+      Animated.timing(spinAnim, {
+        toValue: 1, duration: 1200, easing: Easing.linear, useNativeDriver: true,
+      })
+    );
+    spin.start();
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 0.6, duration: 800, useNativeDriver: true }),
+      ])
+    );
+    pulse.start();
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+      spin.stop();
+      pulse.stop();
+    };
   }, []);
 
   const loadPseudo = async () => {
@@ -137,15 +160,24 @@ export default function GameScreen() {
   };
 
   const fetchQuestions = async () => {
+    setLoading(true);
+    setLoadError(null);
     try {
       const res = await fetch(`${API_URL}/api/game/questions-v2?theme=${params.category}`);
+      if (!res.ok) {
+        throw new Error(`Erreur serveur (${res.status})`);
+      }
       const data = await res.json();
+      if (!Array.isArray(data) || data.length === 0) {
+        throw new Error('Aucune question disponible pour cette catégorie');
+      }
       setQuestions(data.slice(0, TOTAL_QUESTIONS));
       setLoading(false);
       animateQuestion();
       startTimer();
-    } catch {
-      router.back();
+    } catch (err: any) {
+      setLoading(false);
+      setLoadError(err.message || 'Impossible de charger les questions');
     }
   };
 
@@ -280,12 +312,58 @@ export default function GameScreen() {
   };
 
   if (loading || questions.length === 0) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loadingView}>
-          <Text style={styles.loadingText}>Chargement...</Text>
+    const spinInterp = spinAnim.interpolate({
+      inputRange: [0, 1], outputRange: ['0deg', '360deg'],
+    });
+
+    // Show error state
+    if (loadError) {
+      return (
+        <SwipeBackPage>
+        <View style={styles.container}>
+          <SafeAreaView style={styles.safeArea}>
+            <View style={styles.loadingView}>
+              <Text style={styles.errorIcon}>⚠️</Text>
+              <Text style={styles.errorTitle}>Erreur de chargement</Text>
+              <Text style={styles.errorMessage}>{loadError}</Text>
+              <TouchableOpacity style={styles.retryBtn} onPress={fetchQuestions} activeOpacity={0.8}>
+                <Text style={styles.retryBtnText}>Réessayer</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.backBtnLoading} onPress={() => router.back()} activeOpacity={0.8}>
+                <Text style={styles.backBtnLoadingText}>Retour</Text>
+              </TouchableOpacity>
+            </View>
+          </SafeAreaView>
         </View>
-      </SafeAreaView>
+        </SwipeBackPage>
+      );
+    }
+
+    // Loading spinner
+    return (
+      <SwipeBackPage>
+      <View style={styles.container}>
+        <SafeAreaView style={styles.safeArea}>
+          <View style={styles.loadingView}>
+            <View style={styles.spinnerContainer}>
+              <Animated.View style={[styles.spinnerOuter, { transform: [{ rotate: spinInterp }] }]}>
+                <View style={styles.spinnerDot} />
+              </Animated.View>
+              <Animated.View style={[styles.spinnerInner, { opacity: pulseAnim }]}>
+                <Text style={styles.spinnerIcon}>🎯</Text>
+              </Animated.View>
+            </View>
+            <Animated.Text style={[styles.loadingTitle, { opacity: pulseAnim }]}>
+              Chargement des questions
+            </Animated.Text>
+            <Text style={styles.loadingSubtitle}>
+              Récupération depuis la base de données...
+            </Text>
+            <ActivityIndicator color="#8A2BE2" size="small" style={{ marginTop: 16 }} />
+          </View>
+        </SafeAreaView>
+      </View>
+      </SwipeBackPage>
     );
   }
 
@@ -425,8 +503,40 @@ export default function GameScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#050510' },
   safeArea: { flex: 1 },
-  loadingView: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  loadingView: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 },
   loadingText: { color: '#FFF', fontSize: 16 },
+
+  // Loading spinner
+  spinnerContainer: { width: 80, height: 80, justifyContent: 'center', alignItems: 'center', marginBottom: 24 },
+  spinnerOuter: {
+    width: 80, height: 80, borderRadius: 40,
+    borderWidth: 3, borderColor: 'transparent',
+    borderTopColor: '#8A2BE2', borderRightColor: 'rgba(138,43,226,0.3)',
+    position: 'absolute',
+  },
+  spinnerInner: { justifyContent: 'center', alignItems: 'center' },
+  spinnerIcon: { fontSize: 28 },
+  spinnerDot: {
+    width: 8, height: 8, borderRadius: 4, backgroundColor: '#8A2BE2',
+    position: 'absolute', top: 0, left: '50%', marginLeft: -4,
+  },
+  loadingTitle: { color: '#FFF', fontSize: 18, fontWeight: '700', textAlign: 'center', marginBottom: 8 },
+  loadingSubtitle: { color: '#888', fontSize: 13, textAlign: 'center' },
+
+  // Error state
+  errorIcon: { fontSize: 48, marginBottom: 16 },
+  errorTitle: { color: '#FFF', fontSize: 20, fontWeight: '800', marginBottom: 8 },
+  errorMessage: { color: '#AAA', fontSize: 14, textAlign: 'center', marginBottom: 24, lineHeight: 20 },
+  retryBtn: {
+    backgroundColor: '#8A2BE2', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 40,
+    marginBottom: 12,
+  },
+  retryBtnText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
+  backBtnLoading: {
+    borderRadius: 12, paddingVertical: 12, paddingHorizontal: 32,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)',
+  },
+  backBtnLoadingText: { color: '#888', fontSize: 14, fontWeight: '600' },
 
   // Progress bar (question advancement)
   progressBarBg: { height: 6, backgroundColor: '#333', width: '100%', borderRadius: 3, overflow: 'hidden' },
